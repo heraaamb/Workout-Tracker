@@ -1,7 +1,8 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { Calendar } from 'react-native-calendars';
 import { WorkoutCard } from '../components/WorkoutCard';
 import { FAB } from '../components/FAB';
 import { loadWorkouts } from '../utils/storage';
@@ -19,6 +20,7 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 export function HomeScreen() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [selectedMuscle, setSelectedMuscle] = useState<MuscleGroup | 'All'>('All');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const navigation = useNavigation<NavigationProp>();
 
   const fetchWorkouts = async () => {
@@ -32,16 +34,63 @@ export function HomeScreen() {
     }, [])
   );
 
-  const todayStr = new Date().toDateString();
-  const todayWorkouts = workouts.filter(w => new Date(w.date).toDateString() === todayStr);
+  // Build marked dates for calendar with colors
+  const markedDates = useMemo(() => {
+    const marked: Record<string, any> = {};
+    const muscleColorsMap: Record<MuscleGroup, string> = {
+      Chest: '#3B82F6',
+      Back: '#22C55E',
+      Legs: '#EF4444',
+      Shoulders: '#EAB308',
+      Biceps: '#A855F7',
+      Triceps: '#A855F7',
+      Core: '#F97316',
+    };
+
+    workouts.forEach(w => {
+      const dateStr = w.date.split('T')[0];
+      if (!marked[dateStr]) {
+        marked[dateStr] = { dots: [] };
+      }
+      const color = muscleColorsMap[w.muscleGroup] || COLORS.accent;
+      marked[dateStr].dots!.push({
+        color,
+        key: w.muscleGroup,
+        selectedDotIndex: 0,
+      });
+    });
+
+    // Add selection styling
+    if (marked[selectedDate]) {
+      marked[selectedDate].selected = true;
+      marked[selectedDate].selectedColor = COLORS.accent;
+    } else {
+      marked[selectedDate] = { selected: true, selectedColor: COLORS.accent };
+    }
+
+    return marked;
+  }, [workouts, selectedDate]);
+
+  // Get workouts for selected date
+  const selectedDateWorkouts = workouts.filter(w => 
+    w.date.split('T')[0] === selectedDate
+  );
 
   const filteredWorkouts = selectedMuscle === 'All'
-    ? todayWorkouts
-    : todayWorkouts.filter(w => w.muscleGroup === selectedMuscle);
+    ? selectedDateWorkouts
+    : selectedDateWorkouts.filter(w => w.muscleGroup === selectedMuscle);
+
+  const selectedDateObj = new Date(selectedDate);
+  const formattedDate = selectedDateObj.toLocaleDateString('en-US', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
 
   const FilterPills = () => (
     <View style={styles.filtersWrapper}>
-      <Text style={styles.sectionTitle}>Today's Muscle Group</Text>
+      <Text style={styles.sectionTitle}>Muscle Group</Text>
       <FlatList
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -92,13 +141,47 @@ export function HomeScreen() {
       <FlatList
         data={filteredWorkouts}
         keyExtractor={(w, index) => `${w.id}-${index}`}
-        ListHeaderComponent={todayWorkouts.length > 0 ? FilterPills : null}
+        ListHeaderComponent={
+          <>
+            <View style={styles.calendarWrapper}>
+              <Calendar
+                current={selectedDate}
+                onDayPress={(day) => {
+                  setSelectedDate(day.dateString);
+                  setSelectedMuscle('All');
+                }}
+                markedDates={markedDates}
+                markingType="multi-dot"
+                theme={{
+                  backgroundColor: COLORS.background,
+                  calendarBackground: COLORS.surface,
+                  textSectionTitleColor: COLORS.text,
+                  selectedDayBackgroundColor: COLORS.accent,
+                  selectedDayTextColor: COLORS.background,
+                  todayTextColor: COLORS.accent,
+                  dayTextColor: COLORS.text,
+                  textDisabledColor: COLORS.textSecondary,
+                  dotColor: COLORS.accent,
+                  selectedDotColor: COLORS.background,
+                  arrowColor: COLORS.accent,
+                  monthTextColor: COLORS.text,
+                  textMonthFontWeight: 'bold',
+                  textDayHeaderFontWeight: '600',
+                }}
+              />
+            </View>
+            <View style={styles.dateInfoWrapper}>
+              <Text style={styles.selectedDateText}>{formattedDate}</Text>
+            </View>
+            {selectedDateWorkouts.length > 0 && FilterPills()}
+          </>
+        }
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
               <MaterialCommunityIcons name="dumbbell" size={48} color={COLORS.textSecondary} />
             </View>
-            <Text style={styles.emptyText}>No workouts recorded today</Text>
+            <Text style={styles.emptyText}>No workouts recorded</Text>
             <Text style={styles.emptySubtext}>Tap the + button to add one.</Text>
           </View>
         }
@@ -202,5 +285,21 @@ const styles = StyleSheet.create({
   emptySubtext: {
     fontSize: 14,
     color: COLORS.textSecondary,
+  },
+  calendarWrapper: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.md,
+    overflow: 'hidden',
+  },
+  dateInfoWrapper: {
+    paddingHorizontal: SPACING.lg,
+    marginBottom: SPACING.lg,
+  },
+  selectedDateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.accent,
   },
 });
