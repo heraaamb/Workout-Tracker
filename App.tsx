@@ -17,6 +17,7 @@ const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export type RootStackParamList = {
+  Weight: undefined;
   HomeMain: undefined;
   Add: undefined;
   Progress: undefined;
@@ -83,6 +84,10 @@ function Tabs() {
           if (route.name === 'Exercises') {
             return <MaterialCommunityIcons name="dumbbell" size={size} color={color} />;
           }
+
+          if (route.name === 'Weight') {
+            return <MaterialCommunityIcons name="scale-bathroom" size={size} color={color} />;
+          }
         },
       })}
     >
@@ -93,11 +98,15 @@ function Tabs() {
       <Tab.Screen name="Add" component={AddWorkoutScreen} />
 
       <Tab.Screen name="Progress" component={MuscleProgressScreen} />
+
+      <Tab.Screen name="Weight" component={WeightHistoryScreen} />
+
     </Tab.Navigator>
   );
 }
 
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { WeightHistoryScreen } from './src/screens/WeightHistoryScreen';
 
 export default function App() {
   return (
