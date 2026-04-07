@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, ScrollView, Dimensions } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LineChart } from 'react-native-chart-kit';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback } from 'react';
 
 import { loadWorkouts } from '../utils/storage';
 import {
@@ -30,9 +32,16 @@ export function MuscleDetailScreen() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadWorkouts().then(setWorkouts);
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      const fetchData = async () => {
+        const data = await loadWorkouts();
+        setWorkouts(data);
+      };
+
+      fetchData();
+    }, [])
+  );
 
   const exercises = getExercisesForMuscle(workouts, muscle as MuscleGroup);
 
@@ -59,20 +68,37 @@ export function MuscleDetailScreen() {
 
   const color = COLORS.muscleGroups[muscle as MuscleGroup] || COLORS.accent;
 
+  // 🔥 Find correct workout + exercise details
+  const findDetails = (date: string, exerciseName: string) => {
+    for (const w of workouts) {
+      const workoutDate = new Date(w.date).toDateString();
+      const historyDate = new Date(date).toDateString();
+
+      if (workoutDate === historyDate) {
+        const ex = w.exercises.find(e => e.name === exerciseName);
+        if (ex) {
+          return {
+            workoutId: w.id,
+            muscleGroup: ex.muscleGroup,
+          };
+        }
+      }
+    }
+    return null;
+  };
+
   return (
     <ScrollView style={globalStyles.container} contentContainerStyle={styles.scrollContent}>
 
-      {/* 🔥 EXERCISE SELECTOR */}
+      {/* EXERCISE SELECTOR */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selector}>
         {exercises.map((ex, index) => (
           <Text
-            key={`${ex}-${index}`} // ✅ FIXED
+            key={`${ex}-${index}`}
             onPress={() => setSelectedExercise(ex)}
             style={[
               styles.selectorItem,
-              {
-                backgroundColor: selectedExercise === ex ? color : '#333',
-              },
+              { backgroundColor: selectedExercise === ex ? color : '#333' },
             ]}
           >
             {ex}
@@ -80,7 +106,7 @@ export function MuscleDetailScreen() {
         ))}
       </ScrollView>
 
-      {/* 🔥 GRAPH */}
+      {/* GRAPH */}
       <Text style={styles.sectionTitle}>
         {selectedExercise || 'Select Exercise'} Progress
       </Text>
@@ -107,7 +133,7 @@ export function MuscleDetailScreen() {
         />
       </View>
 
-      {/* 🔥 PR DISPLAY */}
+      {/* PR */}
       <View style={styles.prBox}>
         <Text style={styles.prLabel}>Exercise PRs</Text>
 
@@ -123,7 +149,7 @@ export function MuscleDetailScreen() {
         )}
       </View>
 
-      {/* 🔥 HISTORY */}
+      {/* HISTORY */}
       <Text style={[styles.sectionTitle, { marginTop: SPACING.xl }]}>
         Session History
       </Text>
@@ -156,11 +182,7 @@ export function MuscleDetailScreen() {
                 {ex.sets.map((set, i) => (
                   <View key={`set-${i}`} style={styles.setRowClean}>
                     <Text style={styles.setIndex}>{i + 1}</Text>
-
-                    <Text style={styles.setValue}>
-                      {set.reps}
-                    </Text>
-
+                    <Text style={styles.setValue}>{set.reps}</Text>
                     <Text
                       style={[
                         styles.setValue,
@@ -174,17 +196,26 @@ export function MuscleDetailScreen() {
 
                 <Text
                   style={styles.editButton}
-                  onPress={() =>
+                  onPress={() => {
+                    
+                    const details = findDetails(day.date, ex.name);
+
+                    if (!details) {
+                      console.log('❌ No match found', day.date, ex.name);
+                      return;
+                    }
+
                     navigation.navigate('EditWorkout', {
                       workout: {
-                        id: ex.id,
+                        id: ex.name, // ✅ use name as id (stable)
+                        workoutId: details.workoutId,
                         date: day.date,
-                        muscleGroup: muscle as MuscleGroup,
+                        muscleGroup: details.muscleGroup,
                         exercise: ex.name,
                         sets: ex.sets,
                       },
-                    })
-                  }
+                    });
+                  }}
                 >
                   Edit
                 </Text>

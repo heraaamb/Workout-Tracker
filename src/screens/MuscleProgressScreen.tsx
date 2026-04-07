@@ -12,7 +12,7 @@ import type { RootStackParamList } from '../../App';
 
 const MUSCLE_GROUPS: MuscleGroup[] = ['Chest', 'Back', 'Legs', 'Shoulders', 'Biceps', 'Triceps', 'Core'];
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'MuscleProgress'>;
+type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Progress'>;
 
 export function MuscleProgressScreen() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);

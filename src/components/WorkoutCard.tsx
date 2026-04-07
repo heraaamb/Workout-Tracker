@@ -12,24 +12,24 @@ export function WorkoutCard({ workout, showDate = true }: Props) {
   return (
     <View style={styles.card}>
       
-      {/* ✅ NEVER render full object */}
-      <Text style={styles.exercise}>{workout.exercise}</Text>
-      <Text style={styles.muscle}>{workout.muscleGroup}</Text>
-
       {showDate && (
         <Text style={styles.date}>
           {new Date(workout.date).toDateString()}
         </Text>
       )}
 
-      {/* ✅ Render sets properly */}
-      <View style={styles.setsContainer}>
-        {workout.sets.map((set, index) => (
-          <Text key={`set-${index}`} style={styles.set}>
-            {set.reps} × {set.weight}kg
-          </Text>
-        ))}
-      </View>
+      {workout.exercises.map((ex, exIndex) => (
+        <View key={exIndex} style={styles.exerciseContainer}>
+          <Text style={styles.exercise}>{ex.name} ({ex.muscleGroup})</Text>
+          <View style={styles.setsContainer}>
+            {ex.sets.map((set, index) => (
+              <Text key={`set-${index}`} style={styles.set}>
+                {set.reps} × {set.weight}kg
+              </Text>
+            ))}
+          </View>
+        </View>
+      ))}
 
     </View>
   );
@@ -41,6 +41,10 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     borderRadius: RADIUS.md,
     marginBottom: SPACING.md,
+  },
+
+  exerciseContainer: {
+    marginBottom: SPACING.sm,
   },
 
   exercise: {

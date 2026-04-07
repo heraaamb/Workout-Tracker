@@ -4,7 +4,7 @@ import { Workout, MuscleGroup } from '../types';
 
 export const getLastTrained = (workouts: Workout[], muscle: MuscleGroup): string | null => {
   const dates = workouts
-    .filter(w => w.muscleGroup === muscle)
+    .filter(w => w.exercises.some(ex => ex.muscleGroup === muscle))
     .map(w => new Date(w.date).getTime())
     .sort((a, b) => b - a);
 
@@ -14,7 +14,7 @@ export const getLastTrained = (workouts: Workout[], muscle: MuscleGroup): string
 export const getTotalSessions = (workouts: Workout[], muscle: MuscleGroup): number => {
   const uniqueDates = new Set(
     workouts
-      .filter(w => w.muscleGroup === muscle)
+      .filter(w => w.exercises.some(ex => ex.muscleGroup === muscle))
       .map(w => new Date(w.date).toDateString())
   );
 
@@ -23,9 +23,13 @@ export const getTotalSessions = (workouts: Workout[], muscle: MuscleGroup): numb
 
 export const getTotalVolume = (workouts: Workout[], muscle: MuscleGroup): number => {
   return workouts
-    .filter(w => w.muscleGroup === muscle)
+    .filter(w => w.exercises.some(ex => ex.muscleGroup === muscle))
     .reduce((totalVol, w) => {
-      const wVol = w.sets.reduce((sum, set) => sum + (set.reps * set.weight), 0);
+      const wVol = w.exercises
+        .filter(ex => ex.muscleGroup === muscle)
+        .reduce((exVol, ex) => {
+          return exVol + ex.sets.reduce((sum, set) => sum + (set.reps * set.weight), 0);
+        }, 0);
       return totalVol + wVol;
     }, 0);
 };
@@ -47,55 +51,29 @@ export type DayHistory = {
   }[];
 };
 
-export const getMuscleHistory = (workouts: Workout[], muscle: MuscleGroup): DayHistory[] => {
-  const filtered = workouts.filter(w => w.muscleGroup === muscle);
-  const byDate: Record<string, Workout[]> = {};
+export const getMuscleHistory = (workouts: Workout[], muscle: MuscleGroup) => {
+  return workouts
+    .map(w => {
+      const exercises = w.exercises.filter(ex => ex.muscleGroup === muscle);
 
-  filtered.forEach(w => {
-    const dStr = new Date(w.date).toDateString();
-    if (!byDate[dStr]) byDate[dStr] = [];
-    byDate[dStr].push(w);
-  });
-
-  const history: DayHistory[] = Object.keys(byDate).map(dateStr => {
-    const dayWorkouts = byDate[dateStr];
-    let dayVol = 0;
-    let maxWeight = 0; // ✅ track strongest lift that day
-
-    const exercises = dayWorkouts.map(w => {
-      const totalReps = w.sets.reduce((sum, s) => sum + s.reps, 0);
-
-      const vol = w.sets.reduce(
-        (sum, s) => sum + (s.reps * s.weight),
-        0
-      );
-
-      // ✅ find max weight in this workout
-      w.sets.forEach(s => {
-        if (s.weight > maxWeight) {
-          maxWeight = s.weight;
-        }
-      });
-
-      dayVol += vol;
+      if (exercises.length === 0) return null;
 
       return {
-        name: w.exercise,
-        sets: w.sets,
-        totalReps,
-        id: w.id
+        workoutId: w.id, // ✅ KEEP THIS
+        date: w.date,
+        exercises: exercises.map(ex => ({
+          id: ex.name, // ✅ stable id
+          name: ex.name,
+          muscleGroup: ex.muscleGroup, // ✅ keep this
+          sets: ex.sets,
+        })),
+        maxWeight: Math.max(
+          ...exercises.flatMap(ex => ex.sets.map(s => s.weight))
+        ),
       };
-    });
-
-    return {
-      date: dayWorkouts[0].date,
-      volume: dayVol,
-      maxWeight, // ✅ key for strength graph
-      exercises
-    };
-  });
-
-  return history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 };
 
 /* ---------------- VOLUME GRAPH (OLD) ---------------- */
@@ -104,7 +82,6 @@ export const getChartData = (workouts: Workout[], muscle: MuscleGroup) => {
   const history = getMuscleHistory(workouts, muscle);
   const ascHistory = [...history].reverse();
 
-  const volumes = ascHistory.map(h => h.volume);
   const dates = ascHistory.map(h => {
     const d = new Date(h.date);
     return `${d.getMonth() + 1}/${d.getDate()}`;
@@ -112,7 +89,6 @@ export const getChartData = (workouts: Workout[], muscle: MuscleGroup) => {
 
   return {
     labels: dates.length > 0 ? dates : ['N/A'],
-    data: volumes.length > 0 ? volumes : [0]
   };
 };
 
@@ -137,27 +113,29 @@ export const getStrengthChartData = (workouts: Workout[], muscle: MuscleGroup) =
 export const getExercisePRs = (workouts: Workout[], muscle: MuscleGroup) => {
   const prs: Record<string, number> = {};
 
-  workouts
-    .filter(w => w.muscleGroup === muscle)
-    .forEach(w => {
-      const exName = w.exercise;
-
-      w.sets.forEach(set => {
-        if (!prs[exName] || set.weight > prs[exName]) {
-          prs[exName] = set.weight;
-        }
+  workouts.forEach(w => {
+    w.exercises
+      .filter(ex => ex.muscleGroup === muscle)
+      .forEach(ex => {
+        ex.sets.forEach(set => {
+          if (!prs[ex.name] || set.weight > prs[ex.name]) {
+            prs[ex.name] = set.weight;
+          }
+        });
       });
-    });
+  });
 
   return prs;
 };
 
 export const getExerciseCount = (workouts: Workout[], muscle: MuscleGroup) => {
-  const set = new Set(
-    workouts
-      .filter(w => w.muscleGroup === muscle)
-      .map(w => w.exercise)
-  );
+  const set = new Set<string>();
+
+  workouts.forEach(w => {
+    w.exercises
+      .filter(ex => ex.muscleGroup === muscle)
+      .forEach(ex => set.add(ex.name));
+  });
 
   return set.size;
 };
@@ -165,13 +143,15 @@ export const getExerciseCount = (workouts: Workout[], muscle: MuscleGroup) => {
 export const getMaxWeight = (workouts: Workout[], muscle: MuscleGroup) => {
   let max = 0;
 
-  workouts
-    .filter(w => w.muscleGroup === muscle)
-    .forEach(w => {
-      w.sets.forEach(set => {
-        if (set.weight > max) max = set.weight;
+  workouts.forEach(w => {
+    w.exercises
+      .filter(ex => ex.muscleGroup === muscle)
+      .forEach(ex => {
+        ex.sets.forEach(set => {
+          if (set.weight > max) max = set.weight;
+        });
       });
-    });
+  });
 
   return max;
 };
@@ -181,14 +161,16 @@ export const getAvgWeight = (workouts: Workout[], muscle: MuscleGroup) => {
   let total = 0;
   let count = 0;
 
-  workouts
-    .filter(w => w.muscleGroup === muscle)
-    .forEach(w => {
-      w.sets.forEach(set => {
-        total += set.weight;
-        count++;
+  workouts.forEach(w => {
+    w.exercises
+      .filter(ex => ex.muscleGroup === muscle)
+      .forEach(ex => {
+        ex.sets.forEach(set => {
+          total += set.weight;
+          count++;
+        });
       });
-    });
+  });
 
   return count === 0 ? 0 : Math.round(total / count);
 };
@@ -199,9 +181,10 @@ export const getExerciseHistory = (
   exercise: string
 ) => {
   return workouts
-    .filter(w => w.muscleGroup === muscle && w.exercise === exercise)
+    .filter(w => w.exercises.some(ex => ex.muscleGroup === muscle && ex.name === exercise))
     .map(w => {
-      const maxWeight = Math.max(...w.sets.map(s => s.weight));
+      const ex = w.exercises.find(ex => ex.muscleGroup === muscle && ex.name === exercise)!;
+      const maxWeight = Math.max(...ex.sets.map(s => s.weight));
 
       return {
         date: w.date,
@@ -214,9 +197,21 @@ export const getExerciseHistory = (
 export const getExercisesForMuscle = (workouts: Workout[], muscle: MuscleGroup) => {
   return Array.from(
     new Set(
-      workouts
-        .filter(w => w.muscleGroup === muscle)
-        .map(w => w.exercise)
+      workouts.flatMap(w => w.exercises
+        .filter(ex => ex.muscleGroup === muscle)
+        .map(ex => ex.name)
+      )
     )
   );
+};
+
+export const getExercises = (w: any) => {
+  return w.exercises ?? [
+    {
+      id: w.id, // fallback
+      name: w.exercise,
+      muscleGroup: w.muscleGroup,
+      sets: w.sets,
+    },
+  ];
 };

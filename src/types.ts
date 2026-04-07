@@ -5,12 +5,43 @@ export type WorkoutSet = {
   weight: number;
 };
 
+export type WorkoutExercise = {
+  name: string;
+  muscleGroup: MuscleGroup;
+  sets: WorkoutSet[];
+};
+
 export type Workout = {
   id: string;
+  date: string;
+  exercises: WorkoutExercise[];
+};
+
+export type EditableExercise = {
+  id: string; // exercise id
+  workoutId: string; // parent workout id
   date: string;
   muscleGroup: MuscleGroup;
   exercise: string;
   sets: WorkoutSet[];
+};
+
+export type BodyweightEntry = {
+  id: string;
+  date: string;
+  weight: number;
+};
+
+export type DayLog = {
+  date: string;
+  type: 'workout' | 'rest';
+  workoutId?: string;
+  muscleGroups?: MuscleGroup[];
+};
+
+export type StoredExercise = {
+  name: string;
+  muscleGroup: MuscleGroup;
 };
 
 export const EXERCISES_BY_MUSCLE: Record<MuscleGroup, string[]> = {

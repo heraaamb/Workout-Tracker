@@ -1,82 +1,110 @@
 import React from 'react';
-import { StatusBar } from 'expo-status-bar';
-import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { NavigationContainer } from '@react-navigation/native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+
 import { HomeScreen } from './src/screens/HomeScreen';
 import { AddWorkoutScreen } from './src/screens/AddWorkoutScreen';
 import { MuscleProgressScreen } from './src/screens/MuscleProgressScreen';
-import { MuscleDetailScreen } from './src/screens/MuscleDetailScreen';
-import { COLORS } from './src/styles/theme';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import type { Workout } from './src/types';
 import { EditWorkoutScreen } from './src/screens/EditWorkoutScreen';
+import { COLORS } from './src/styles/theme';
+import { MuscleGroup } from './src/types';
+import { MuscleDetailScreen } from './src/screens/MuscleDetailScreen';
+import { ExerciseManagerScreen } from './src/screens/ExerciseManagerScreen';
 
-
-export type RootStackParamList = {
-  Home: undefined;
-  AddWorkout: undefined;
-  MuscleProgress: undefined;
-  MuscleDetail: { muscle: string };
-  EditWorkout: { workout: Workout };
-};
-
+const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-const DarkTheme = {
-  ...DefaultTheme,
-  colors: {
-    ...DefaultTheme.colors,
-    background: COLORS.background,
-    card: COLORS.surface,
-    text: COLORS.text,
-    border: COLORS.border,
-    primary: COLORS.accent,
-  },
+export type RootStackParamList = {
+  HomeMain: undefined;
+  Add: undefined;
+  Progress: undefined;
+  ExerciseManager: undefined;
+
+  MuscleDetail: {
+    muscle: MuscleGroup;
+  };
+
+  EditWorkout: {
+    workout: {
+      id: string;
+      workoutId: string;
+      date: string;
+      muscleGroup: string;
+      exercise: string;
+      sets: { reps: number; weight: number }[];
+    };
+  };
 };
+
+function HomeStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="HomeMain" component={HomeScreen} />
+      <Stack.Screen name="MuscleDetail" component={MuscleDetailScreen} />
+      <Stack.Screen name="EditWorkout" component={EditWorkoutScreen} />
+      <Stack.Screen name="ExerciseManager" component={ExerciseManagerScreen} />
+    </Stack.Navigator>
+  );
+}
+
+
+
+function Tabs() {
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+
+        tabBarStyle: {
+          backgroundColor: COLORS.surface,
+          borderTopWidth: 0,
+          height: 70,
+          paddingBottom: 10,
+        },
+
+        tabBarActiveTintColor: COLORS.accent,
+        tabBarInactiveTintColor: '#888',
+
+        tabBarIcon: ({ color, size }) => {
+          if (route.name === 'Home') {
+            return <MaterialCommunityIcons name="home" size={size} color={color} />;
+          }
+
+          if (route.name === 'Progress') {
+            return <MaterialCommunityIcons name="chart-bar" size={size} color={color} />;
+          }
+
+          if (route.name === 'Add') {
+            return <MaterialCommunityIcons name="plus-circle" size={36} color={COLORS.accent} />;
+          }
+
+          if (route.name === 'Exercises') {
+            return <MaterialCommunityIcons name="dumbbell" size={size} color={color} />;
+          }
+        },
+      })}
+    >
+      <Tab.Screen name="Home" component={HomeStack} />
+
+      <Tab.Screen name="Exercises" component={ExerciseManagerScreen} />
+
+      <Tab.Screen name="Add" component={AddWorkoutScreen} />
+
+      <Tab.Screen name="Progress" component={MuscleProgressScreen} />
+    </Tab.Navigator>
+  );
+}
+
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <NavigationContainer theme={DarkTheme}>
-        <StatusBar style="light" />
-        <Stack.Navigator 
-          screenOptions={{ 
-            headerStyle: { backgroundColor: COLORS.background },
-            headerTintColor: COLORS.text,
-            headerShadowVisible: false,
-            contentStyle: { backgroundColor: COLORS.background },
-          }}
-        >
-          <Stack.Screen 
-            name="Home" 
-            component={HomeScreen} 
-            options={{ headerShown: false }} 
-          />
-          <Stack.Screen 
-            name="AddWorkout" 
-            component={AddWorkoutScreen} 
-            options={{ 
-              title: '',
-              headerBackTitleVisible: false,
-              headerTransparent: true,
-            }} 
-          />
-          <Stack.Screen 
-            name="MuscleProgress" 
-            component={MuscleProgressScreen} 
-            options={{ title: 'Muscle Progress', headerBackTitleVisible: false }} 
-          />
-          <Stack.Screen 
-            name="MuscleDetail" 
-            component={MuscleDetailScreen} 
-            options={({ route }) => ({ title: route.params.muscle, headerBackTitleVisible: false })} 
-          />
-          <Stack.Screen 
-            name="EditWorkout"
-            component={EditWorkoutScreen} 
-          />
-        </Stack.Navigator>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <NavigationContainer>
+        <Tabs />
       </NavigationContainer>
-    </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

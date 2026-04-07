@@ -1,8 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Workout } from '../types';
+import type { BodyweightEntry, DayLog, Workout } from '../types';
+import type { StoredExercise } from '../types';
 
 const WORKOUTS_KEY = '@workout_tracker_workouts';
 const EXERCISES_KEY = '@workout_tracker_exercises';
+const BODYWEIGHT_KEY = '@bodyweight_logs';
+const DAYLOG_KEY = '@day_logs';
 
 // 📥 Load workouts
 export const loadWorkouts = async (): Promise<Workout[]> => {
@@ -85,32 +88,68 @@ export const clearWorkouts = async (): Promise<void> => {
   }
 };
 
-type StoredExercise = {
-  name: string;
-  muscleGroup: string;
-};
-
 export const getExercises = async (): Promise<StoredExercise[]> => {
   const data = await AsyncStorage.getItem(EXERCISES_KEY);
   return data ? JSON.parse(data) : [];
 };
 
-export const saveExercise = async (exercise: string, muscleGroup: string) => {
+export const saveExercise = async (name: string, muscleGroup: string) => {
   const existing = await getExercises();
 
-  const newExercise: StoredExercise = {
-    name: exercise.trim(),
-    muscleGroup,
-  };
-
   const updated = [
-    ...existing.filter(
-      ex =>
-        !(ex.name.toLowerCase() === newExercise.name.toLowerCase() &&
-          ex.muscleGroup === muscleGroup)
-    ),
-    newExercise,
+    ...existing,
+    { name: name.trim(), muscleGroup }
   ];
 
+  const unique = updated.filter(
+    (v, i, arr) =>
+      arr.findIndex(
+        e => e.name === v.name && e.muscleGroup === v.muscleGroup
+      ) === i
+  );
+
+  await AsyncStorage.setItem(EXERCISES_KEY, JSON.stringify(unique));
+};
+
+export const deleteExercise = async (name: string, muscleGroup: string) => {
+  const existing = await getExercises();
+
+  const updated = existing.filter(
+    ex => !(ex.name === name && ex.muscleGroup === muscleGroup)
+  );
+
   await AsyncStorage.setItem(EXERCISES_KEY, JSON.stringify(updated));
+};
+
+export const loadBodyweight = async (): Promise<BodyweightEntry[]> => {
+  const data = await AsyncStorage.getItem(BODYWEIGHT_KEY);
+  return data ? JSON.parse(data) : [];
+};
+
+export const saveBodyweight = async (entries: BodyweightEntry[]) => {
+  await AsyncStorage.setItem(BODYWEIGHT_KEY, JSON.stringify(entries));
+};
+
+export const addBodyweight = async (weight: number) => {
+  const existing = await loadBodyweight();
+
+  const newEntry: BodyweightEntry = {
+    id: Date.now().toString(),
+    date: new Date().toISOString(),
+    weight,
+  };
+
+  const updated = [newEntry, ...existing];
+  await saveBodyweight(updated);
+
+  return updated;
+};
+
+export const loadDayLogs = async (): Promise<DayLog[]> => {
+  const data = await AsyncStorage.getItem(DAYLOG_KEY);
+  return data ? JSON.parse(data) : [];
+};
+
+export const saveDayLogs = async (logs: DayLog[]) => {
+  await AsyncStorage.setItem(DAYLOG_KEY, JSON.stringify(logs));
 };

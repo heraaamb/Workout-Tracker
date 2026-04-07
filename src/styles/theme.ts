@@ -14,14 +14,14 @@ export const COLORS: Record<string, any> = {
   success: '#00CC6F',
   transparent: 'transparent',
   muscleGroups: {
-    All: '#00FF88',
-    Chest: '#3B82F6',   // blue-500
-    Back: '#22C55E',    // green-500
-    Legs: '#EF4444',    // red-500
-    Shoulders: '#EAB308',// yellow-500
-    Biceps: '#A855F7',  // purple-500
+    All: '#FFFFFF',
+    Chest: '#FF3B3B',   // blue-500
+    Back: '#3B82F6',    // green-500
+    Legs: '#22C55E',    // red-500
+    Shoulders: '#F97316',// yellow-500
+    Biceps: '#FACC15',  // purple-500
     Triceps: '#A855F7', // purple-500
-    Core: '#F97316',    // orange-500
+    Core: '#22D3EE',    // orange-500
   }
 };
 

@@ -1,197 +1,281 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  TextInput,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Calendar } from 'react-native-calendars';
 import { WorkoutCard } from '../components/WorkoutCard';
 import { FAB } from '../components/FAB';
-import { loadWorkouts } from '../utils/storage';
+import {
+  loadWorkouts,
+  loadBodyweight,
+  addBodyweight,
+  loadDayLogs,
+  saveDayLogs,
+} from '../utils/storage';
+
 import { COLORS, globalStyles, SPACING, RADIUS } from '../styles/theme';
-import type { Workout, MuscleGroup } from '../types';
+import type { Workout, MuscleGroup, DayLog } from '../types';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../App';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+const MUSCLE_GROUPS: MuscleGroup[] = [
+  'Chest',
+  'Back',
+  'Legs',
+  'Shoulders',
+  'Biceps',
+  'Triceps',
+  'Core',
+];
 
-const MUSCLE_GROUPS: MuscleGroup[] = ['Chest', 'Back', 'Legs', 'Shoulders', 'Biceps', 'Triceps', 'Core'];
-
-type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
+type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'HomeMain'>;
 
 export function HomeScreen() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
+  const [bodyweight, setBodyweight] = useState<any[]>([]);
+  const [logs, setLogs] = useState<any[]>([]);
+  const [weightInput, setWeightInput] = useState('');
+
   const [selectedMuscle, setSelectedMuscle] = useState<MuscleGroup | 'All'>('All');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(
+    new Date().toISOString().split('T')[0]
+  );
+
   const navigation = useNavigation<NavigationProp>();
 
-  const fetchWorkouts = async () => {
-    const data = await loadWorkouts();
-    setWorkouts(data);
+  const fetchData = async () => {
+    const w = await loadWorkouts();
+    const bw = await loadBodyweight();
+    const lg = await loadDayLogs();
+
+    setWorkouts(w);
+    setBodyweight(bw);
+    setLogs(lg);
   };
 
   useFocusEffect(
     useCallback(() => {
-      fetchWorkouts();
+      fetchData();
     }, [])
   );
 
-  // Build marked dates for calendar with colors
-  const markedDates = useMemo(() => {
-    const marked: Record<string, any> = {};
-    const muscleColorsMap: Record<MuscleGroup, string> = {
-      Chest: '#3B82F6',
-      Back: '#22C55E',
-      Legs: '#EF4444',
-      Shoulders: '#EAB308',
-      Biceps: '#A855F7',
-      Triceps: '#A855F7',
-      Core: '#F97316',
+  // 🔥 REST DAY
+  const addRestDay = async () => {
+    const today = new Date().toISOString().split('T')[0];
+
+    const existingLogs = await loadDayLogs();
+    const workouts = await loadWorkouts();
+
+    // ❌ check if workout exists today
+    const hasWorkout = workouts.some(
+      w => w.date.split('T')[0] === today
+    );
+
+    if (hasWorkout) {
+      alert('You already logged a workout today');
+      return;
+    }
+
+    // ❌ check if rest already exists
+    const hasRest = existingLogs.some(
+      log =>
+        log.type === 'rest' &&
+        log.date.split('T')[0] === today
+    );
+
+    if (hasRest) {
+      alert('Rest day already logged');
+      return;
+    }
+
+    // ✅ add rest
+    const newLog: DayLog = {
+      date: new Date().toISOString(),
+      type: 'rest',
     };
 
+    await saveDayLogs([newLog, ...existingLogs]);
+
+    fetchData(); // refresh
+  };
+
+  // 🔥 BODYWEIGHT
+  const handleAddWeight = async () => {
+    if (!weightInput) return;
+
+    await addBodyweight(Number(weightInput));
+    setWeightInput('');
+    fetchData();
+  };
+
+  // 🔥 CALENDAR DOTS (WORKOUT + REST)
+  const markedDates = useMemo(() => {
+    const marked: any = {};
+
+    // workouts
     workouts.forEach(w => {
-      const dateStr = w.date.split('T')[0];
-      if (!marked[dateStr]) {
-        marked[dateStr] = { dots: [] };
-      }
-      const color = muscleColorsMap[w.muscleGroup] || COLORS.accent;
-      marked[dateStr].dots!.push({
-        color,
-        key: w.muscleGroup,
-        selectedDotIndex: 0,
+      const date = w.date.split('T')[0];
+
+      if (!marked[date]) marked[date] = { dots: [] };
+
+      const uniqueMuscles = [
+        ...new Set(w.exercises.map(ex => ex.muscleGroup)),
+      ];
+
+      uniqueMuscles.forEach(muscle => {
+        const exists = marked[date].dots.some((d: any) => d.key === muscle);
+
+        if (!exists) {
+          marked[date].dots.push({
+            key: muscle,
+            color: COLORS.muscleGroups[muscle],
+          });
+        }
       });
     });
 
-    // Add selection styling
-    if (marked[selectedDate]) {
-      marked[selectedDate].selected = true;
-      marked[selectedDate].selectedColor = COLORS.accent;
-    } else {
-      marked[selectedDate] = { selected: true, selectedColor: COLORS.accent };
-    }
+    // rest days
+    logs.forEach(log => {
+      if (log.type === 'rest') {
+        const date = log.date.split('T')[0];
+
+        if (!marked[date]) marked[date] = { dots: [] };
+
+        marked[date].dots.push({
+          key: 'rest',
+          color: '#9E9E9E',
+        });
+      }
+    });
+
+    // selected
+    if (!marked[selectedDate]) marked[selectedDate] = { dots: [] };
+
+    marked[selectedDate].selected = true;
+    marked[selectedDate].selectedColor = COLORS.accent;
 
     return marked;
-  }, [workouts, selectedDate]);
+  }, [workouts, logs, selectedDate]);
 
-  // Get workouts for selected date
-  const selectedDateWorkouts = workouts.filter(w => 
-    w.date.split('T')[0] === selectedDate
+  const selectedDateWorkouts = workouts.filter(
+    w => w.date.split('T')[0] === selectedDate
   );
 
-  const filteredWorkouts = selectedMuscle === 'All'
-    ? selectedDateWorkouts
-    : selectedDateWorkouts.filter(w => w.muscleGroup === selectedMuscle);
+  const filteredWorkouts =
+    selectedMuscle === 'All'
+      ? selectedDateWorkouts
+      : selectedDateWorkouts.filter(w =>
+          w.exercises.some(ex => ex.muscleGroup === selectedMuscle)
+        );
 
-  const selectedDateObj = new Date(selectedDate);
-  const formattedDate = selectedDateObj.toLocaleDateString('en-US', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  });
-
-  const FilterPills = () => (
-    <View style={styles.filtersWrapper}>
-      <Text style={styles.sectionTitle}>Muscle Group</Text>
-      <FlatList
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        data={['All', ...MUSCLE_GROUPS] as ('All' | MuscleGroup)[]}
-        keyExtractor={(item) => item}
-        renderItem={({ item }) => {
-          const isSelected = item === selectedMuscle;
-          const color = item === 'All' ? COLORS.accent : (COLORS.muscleGroups[item] || COLORS.textSecondary);
-          return (
-            <TouchableOpacity
-              style={[
-                styles.pill,
-                isSelected ? { backgroundColor: `${color}20`, borderColor: color } : {}
-              ]}
-              onPress={() => setSelectedMuscle(item)}
-            >
-              <Text style={[styles.pillText, isSelected ? { color } : {}]}>
-                {item}
-              </Text>
-            </TouchableOpacity>
-          );
-        }}
-        contentContainerStyle={styles.filtersContent}
-      />
-    </View>
-  );
+  const latestWeight = bodyweight[0]?.weight;
 
   return (
     <SafeAreaView style={globalStyles.container}>
+      {/* HEADER */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.avatar}>
             <MaterialCommunityIcons name="dumbbell" size={24} color="white" />
           </View>
+
           <View>
             <Text style={styles.welcomeText}>Welcome back</Text>
             <Text style={globalStyles.title}>Workout Tracker</Text>
           </View>
         </View>
-        <TouchableOpacity 
+
+        <TouchableOpacity
           style={styles.progressBtn}
-          onPress={() => navigation.navigate('MuscleProgress' as any)}
+          onPress={() => navigation.navigate('Progress')}
         >
-          <MaterialCommunityIcons name="chart-bar" size={24} color={COLORS.accent} />
+          <MaterialCommunityIcons
+            name="chart-bar"
+            size={24}
+            color={COLORS.accent}
+          />
         </TouchableOpacity>
       </View>
 
       <FlatList
         data={filteredWorkouts}
-        keyExtractor={(w, index) => `${w.id}-${index}`}
+        keyExtractor={(w, i) => `${w.id}-${i}`}
         ListHeaderComponent={
           <>
+            {/* 🔥 BODYWEIGHT */}
+            <View style={styles.weightCard}>
+              <Text style={styles.weightTitle}>Bodyweight</Text>
+
+              <Text style={styles.weightValue}>
+                {latestWeight ? `${latestWeight} kg` : 'No data'}
+              </Text>
+
+              <View style={styles.weightInputRow}>
+                <TextInput
+                  placeholder="Enter weight"
+                  placeholderTextColor="#888"
+                  style={styles.input}
+                  value={weightInput}
+                  onChangeText={setWeightInput}
+                  keyboardType="numeric"
+                />
+
+                <TouchableOpacity
+                  style={styles.saveBtn}
+                  onPress={handleAddWeight}
+                >
+                  <Text style={{ color: '#000' }}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* 🔥 REST BUTTON */}
+            <TouchableOpacity
+              style={styles.restBtn}
+              onPress={addRestDay}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.restBtnText}>Rest Day</Text>
+            </TouchableOpacity>
+
+            {/* 📅 CALENDAR */}
             <View style={styles.calendarWrapper}>
               <Calendar
                 current={selectedDate}
-                onDayPress={(day) => {
-                  setSelectedDate(day.dateString);
-                  setSelectedMuscle('All');
-                }}
-                markedDates={markedDates}
                 markingType="multi-dot"
+                markedDates={markedDates}
+                onDayPress={d => setSelectedDate(d.dateString)}
                 theme={{
                   backgroundColor: COLORS.background,
                   calendarBackground: COLORS.surface,
-                  textSectionTitleColor: COLORS.text,
-                  selectedDayBackgroundColor: COLORS.accent,
-                  selectedDayTextColor: COLORS.background,
-                  todayTextColor: COLORS.accent,
                   dayTextColor: COLORS.text,
-                  textDisabledColor: COLORS.textSecondary,
-                  dotColor: COLORS.accent,
-                  selectedDotColor: COLORS.background,
-                  arrowColor: COLORS.accent,
                   monthTextColor: COLORS.text,
-                  textMonthFontWeight: 'bold',
-                  textDayHeaderFontWeight: '600',
+                  selectedDayBackgroundColor: COLORS.accent,
+                  todayTextColor: COLORS.accent,
                 }}
               />
             </View>
-            <View style={styles.dateInfoWrapper}>
-              <Text style={styles.selectedDateText}>{formattedDate}</Text>
-            </View>
-            {selectedDateWorkouts.length > 0 && FilterPills()}
           </>
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIcon}>
-              <MaterialCommunityIcons name="dumbbell" size={48} color={COLORS.textSecondary} />
-            </View>
-            <Text style={styles.emptyText}>No workouts recorded</Text>
-            <Text style={styles.emptySubtext}>Tap the + button to add one.</Text>
-          </View>
         }
         renderItem={({ item }) => (
           <WorkoutCard workout={item} showDate={false} />
         )}
-        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={
+          <Text style={{ textAlign: 'center', marginTop: 40 }}>
+            No workouts
+          </Text>
+        }
       />
 
-      <FAB onPress={() => navigation.navigate('AddWorkout')} />
+      <FAB onPress={() => navigation.navigate('Add')} />
     </SafeAreaView>
   );
 }
@@ -302,4 +386,62 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.accent,
   },
+
+weightCard: {
+  backgroundColor: COLORS.surface,
+  marginHorizontal: SPACING.lg,
+  marginBottom: SPACING.md,
+  padding: SPACING.md,
+  borderRadius: RADIUS.lg,
+},
+
+weightTitle: {
+  fontSize: 14,
+  color: COLORS.textSecondary,
+  marginBottom: 4,
+},
+
+weightValue: {
+  fontSize: 26,
+  fontWeight: 'bold',
+  color: COLORS.accent,
+},
+
+weightInputRow: {
+  flexDirection: 'row',
+  gap: 10,
+},
+
+input: {
+  flex: 1,
+  backgroundColor: '#1E1E1E',
+  padding: 10,
+  borderRadius: 8,
+  color: COLORS.text,
+},
+
+saveBtn: {
+  backgroundColor: COLORS.accent,
+  paddingHorizontal: 16,
+  justifyContent: 'center',
+  borderRadius: 8,
+},
+
+restBtn: {
+  marginHorizontal: SPACING.lg,
+  marginBottom: SPACING.md,
+  backgroundColor: '#1E1E1E',
+  paddingVertical: 14,
+  borderRadius: 12,
+  alignItems: 'center',
+  borderWidth: 1,
+  borderColor: '#9E9E9E',
+},
+
+restBtnText: {
+  color: '#9E9E9E',
+  fontWeight: '600',
+  fontSize: 16,
+},
+
 });

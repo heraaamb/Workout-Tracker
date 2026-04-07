@@ -1,72 +1,38 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, KeyboardAvoidingView, Platform
+  TextInput, KeyboardAvoidingView, Platform,
+  Pressable
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { getExercises, loadWorkouts, saveExercise, saveWorkouts } from '../utils/storage';
+import { getExercises, loadDayLogs, loadWorkouts, saveDayLogs, saveExercise, saveWorkouts } from '../utils/storage';
 import { EXERCISES_BY_MUSCLE } from '../types';
 import { COLORS, globalStyles, SPACING, RADIUS } from '../styles/theme';
-import type { MuscleGroup, WorkoutSet, Workout } from '../types';
+import type { MuscleGroup, WorkoutSet, WorkoutExercise, Workout, DayLog } from '../types';
+import type { StoredExercise } from '../types';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback } from 'react';
 
 const MUSCLE_GROUPS: MuscleGroup[] = ['Chest', 'Back', 'Legs', 'Shoulders', 'Biceps', 'Triceps', 'Core'];
+
+// SAME IMPORTS (keep yours)
 
 export function AddWorkoutScreen() {
   const navigation = useNavigation();
 
+  const [workoutExercises, setWorkoutExercises] = useState<WorkoutExercise[]>([]);
   const [muscleGroup, setMuscleGroup] = useState<MuscleGroup | ''>('');
   const [exercise, setExercise] = useState('');
   const [sets, setSets] = useState<WorkoutSet[]>([{ reps: 0, weight: 0 }]);
 
-type StoredExercise = {
-  name: string;
-  muscleGroup: string;
-};
+  const [exerciseList, setExerciseList] = useState<StoredExercise[]>([]);
+  const [newExercise, setNewExercise] = useState('');
 
-const [exerciseList, setExerciseList] = useState<StoredExercise[]>([]);
-const [newExercise, setNewExercise] = useState('');
-
-  /* ---------------- LOAD EXERCISES ---------------- */
-
-  useEffect(() => {
-    getExercises().then(setExerciseList);
-  }, []);
-
-  /* ---------------- ADD CUSTOM EXERCISE ---------------- */
-
-  const handleAddExercise = async () => {
-    if (!newExercise.trim() || !muscleGroup) return;
-
-    await saveExercise(newExercise.trim(), muscleGroup);
-
-    const updated = await getExercises();
-    setExerciseList(updated);
-
-    setExercise(newExercise.trim());
-    setNewExercise('');
-  };
-
-  /* ---------------- MERGE + DEDUP ---------------- */
-
-  const availableExercises = muscleGroup
-    ? [
-        ...(EXERCISES_BY_MUSCLE[muscleGroup] || []),
-        ...exerciseList
-          .filter(ex => ex.muscleGroup === muscleGroup)
-          .map(ex => ex.name),
-      ]
-    : [];
-
-  const uniqueExercises = availableExercises.filter(
-    (ex, index, self) => self.indexOf(ex) === index
+  useFocusEffect(
+    useCallback(() => {
+      getExercises().then(setExerciseList);
+    }, [])
   );
-
-  /* ---------------- HANDLERS ---------------- */
-
-  const handleMuscleGroupChange = (group: MuscleGroup) => {
-    setMuscleGroup(group);
-    setExercise('');
-  };
 
   const handleAddSet = () => {
     setSets(prev => [...prev, { reps: 0, weight: 0 }]);
@@ -79,15 +45,25 @@ const [newExercise, setNewExercise] = useState('');
     setSets(newSets);
   };
 
-  const handleSave = async () => {
+  const handleAddExerciseToWorkout = () => {
     if (!muscleGroup || !exercise || sets.some(s => s.reps === 0 || s.weight === 0)) return;
+
+    setWorkoutExercises(prev => [
+      ...prev,
+      { name: exercise, muscleGroup, sets }
+    ]);
+
+    setExercise('');
+    setSets([{ reps: 0, weight: 0 }]);
+  };
+
+  const handleSave = async () => {
+    if (workoutExercises.length === 0) return;
 
     const newWorkout: Workout = {
       id: Date.now().toString(),
       date: new Date().toISOString(),
-      muscleGroup,
-      exercise,
-      sets,
+      exercises: workoutExercises,
     };
 
     const existing = await loadWorkouts();
@@ -96,12 +72,22 @@ const [newExercise, setNewExercise] = useState('');
     navigation.goBack();
   };
 
-  const isValid =
+  const availableExercises = muscleGroup
+  ? [
+      ...(EXERCISES_BY_MUSCLE[muscleGroup] || []),
+      ...exerciseList
+        .filter(ex => ex.muscleGroup === muscleGroup)
+        .map(ex => ex.name),
+    ]
+  : [];
+
+  const uniqueExercises = [...new Set(availableExercises)];
+
+  const isExerciseValid =
     muscleGroup !== '' &&
     exercise !== '' &&
     sets.every(s => s.reps > 0 && s.weight > 0);
 
-  /* ---------------- UI ---------------- */
 
   return (
     <KeyboardAvoidingView
@@ -110,29 +96,28 @@ const [newExercise, setNewExercise] = useState('');
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
 
-        <Text style={styles.headerTitle}>Add Workout</Text>
+        <Text style={styles.headerTitle}>Build Workout</Text>
 
         {/* MUSCLE */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Muscle Group</Text>
-
-          <View style={styles.muscleGrid}>
-            {MUSCLE_GROUPS.map(group => {
-              const isSelected = muscleGroup === group;
-              const color = COLORS.muscleGroups[group] || COLORS.accent;
-              return (
-                <TouchableOpacity
-                  key={group}
-                  onPress={() => handleMuscleGroupChange(group)}
-                  style={[
-                    styles.muscleButton,
-                    isSelected ? { backgroundColor: `${color}20`, borderColor: color, borderWidth: 1 } : {}
-                  ]}
-                >
-                  <Text style={[styles.text, isSelected ? { color } : {}]}>{group}</Text>
-                </TouchableOpacity>
-              );
-            })}
+          <Text style={styles.sectionTitle}>Muscle</Text>
+          
+          <View style={styles.pillRow}>
+            {MUSCLE_GROUPS.map(m => (
+              <Pressable
+                key={m}
+                style={[
+                  styles.pill,
+                  muscleGroup === m && {
+                    backgroundColor: COLORS.muscleGroups[m],
+                    borderColor: COLORS.muscleGroups[m],
+                  },
+                ]}
+                onPress={() => setMuscleGroup(m)}
+              >
+                <Text style={styles.pillText}>{m}</Text>
+              </Pressable>
+            ))}
           </View>
         </View>
 
@@ -141,33 +126,20 @@ const [newExercise, setNewExercise] = useState('');
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Exercise</Text>
 
-            <View style={styles.exerciseList}>
-              {uniqueExercises.map((ex, index) => (
-                <TouchableOpacity
-                  key={`${ex}-${index}`}   // ✅ FIXED KEY
-                  onPress={() => setExercise(ex)}
+            <View style={styles.exerciseGrid}>
+              {uniqueExercises.map((ex, i) => (
+                <Pressable
+                  key={`${ex}-${i}`}
                   style={[
-                    styles.exerciseButton,
-                    exercise === ex && styles.selected
+                    styles.exerciseCard,
+                    exercise === ex && styles.exerciseSelected
                   ]}
+                  onPress={() => setExercise(ex)}
                 >
-                  <Text style={styles.text}>{ex}</Text>
-                </TouchableOpacity>
+                  <Text style={styles.exerciseText}>{ex}</Text>
+                </Pressable>
               ))}
             </View>
-
-            {/* ADD NEW */}
-            <TextInput
-              placeholder="Add new exercise"
-              placeholderTextColor="#888"
-              value={newExercise}
-              onChangeText={setNewExercise}
-              style={styles.input}
-            />
-
-            <TouchableOpacity style={styles.addBtn} onPress={handleAddExercise}>
-              <Text style={styles.addBtnText}>Add Exercise</Text>
-            </TouchableOpacity>
           </View>
         )}
 
@@ -176,45 +148,69 @@ const [newExercise, setNewExercise] = useState('');
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Sets</Text>
 
+            <View style={styles.setHeader}>
+              <Text style={styles.setHeaderText}>Set</Text>
+              <Text style={styles.setHeaderText}>Reps</Text>
+              <Text style={styles.setHeaderText}>Weight</Text>
+            </View>
+
             {sets.map((set, i) => (
-              <View key={`set-${i}`} style={styles.setRow}>
+              <View key={i} style={styles.setRow}>
+                <Text style={styles.setIndex}>{i + 1}</Text>
+
                 <TextInput
-                  style={styles.input}
+                  style={styles.setInput}
                   keyboardType="numeric"
-                  placeholder="Reps"
-                  placeholderTextColor={COLORS.textSecondary}
                   value={set.reps ? String(set.reps) : ''}
                   onChangeText={(v) => handleSetChange(i, 'reps', v)}
                 />
 
                 <TextInput
-                  style={styles.input}
+                  style={styles.setInput}
                   keyboardType="numeric"
-                  placeholder="Weight"
-                  placeholderTextColor={COLORS.textSecondary}
                   value={set.weight ? String(set.weight) : ''}
                   onChangeText={(v) => handleSetChange(i, 'weight', v)}
                 />
               </View>
             ))}
 
-            <TouchableOpacity onPress={handleAddSet}>
+            <Pressable onPress={handleAddSet}>
               <Text style={styles.addSet}>+ Add Set</Text>
-            </TouchableOpacity>
+            </Pressable>
+
+            <Pressable
+              style={[styles.addBtn, !isExerciseValid && { opacity: 0.5 }]}
+              disabled={!isExerciseValid}
+              onPress={handleAddExerciseToWorkout}
+            >
+              <Text style={styles.addBtnText}>Add Exercise</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* WORKOUT PREVIEW */}
+        {workoutExercises.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Workout</Text>
+
+            {workoutExercises.map((ex, i) => (
+              <View key={i} style={styles.previewCard}>
+                <Text style={styles.previewTitle}>{ex.name}</Text>
+                <Text style={styles.previewSub}>
+                  {ex.sets.length} sets • {ex.muscleGroup}
+                </Text>
+              </View>
+            ))}
           </View>
         )}
 
       </ScrollView>
 
       {/* SAVE */}
-      {exercise !== '' && (
-        <TouchableOpacity
-          style={[styles.saveBtn, !isValid && { opacity: 0.5 }]}
-          disabled={!isValid}
-          onPress={handleSave}
-        >
+      {workoutExercises.length > 0 && (
+        <Pressable style={styles.saveBtn} onPress={handleSave}>
           <Text style={styles.saveText}>Save Workout</Text>
-        </TouchableOpacity>
+        </Pressable>
       )}
     </KeyboardAvoidingView>
   );
@@ -223,7 +219,7 @@ const [newExercise, setNewExercise] = useState('');
 /* ---------------- STYLES ---------------- */
 
 const styles = StyleSheet.create({
-  scrollContent: { padding: SPACING.lg, paddingBottom: 120 },
+  scrollContent: { padding: SPACING.lg, paddingBottom: 140 },
 
   headerTitle: {
     fontSize: 28,
@@ -273,6 +269,7 @@ const styles = StyleSheet.create({
   },
 
   input: {
+    flex: 1,
     backgroundColor: COLORS.surface,
     padding: 10,
     borderRadius: 8,
@@ -303,6 +300,18 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
 
+  summaryCard: {
+    backgroundColor: COLORS.surface,
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+
+  exName: {
+    color: COLORS.text,
+    fontWeight: '600',
+  },
+
   saveBtn: {
     position: 'absolute',
     bottom: 20,
@@ -317,4 +326,110 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: 'bold',
   },
+
+  restBtn: {
+    marginTop: 12,
+    backgroundColor: '#1E1E1E', // dark card style
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+
+    borderWidth: 1,
+    borderColor: '#9E9E9E', // subtle grey (rest color)
+  },
+
+  restBtnText: {
+    color: '#9E9E9E',
+    fontWeight: '600',
+    fontSize: 16,
+    letterSpacing: 0.5,
+  },
+
+  pillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+
+  pill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#1E1E1E',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+
+  pillText: {
+    color: '#ccc',
+    fontWeight: '600',
+  },
+
+  exerciseGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+
+  exerciseCard: {
+    padding: 10,
+    backgroundColor: '#1E1E1E',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+
+  exerciseSelected: {
+    backgroundColor: COLORS.accent,
+  },
+
+  exerciseText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+
+  setHeader: {
+    flexDirection: 'row',
+    marginBottom: 6,
+  },
+
+  setHeaderText: {
+    flex: 1,
+    textAlign: 'center',
+    color: COLORS.textSecondary,
+  },
+
+  setIndex: {
+    flex: 1,
+    textAlign: 'center',
+    color: COLORS.textSecondary,
+  },
+
+  setInput: {
+    flex: 1,
+    backgroundColor: '#1E1E1E',
+    marginHorizontal: 4,
+    padding: 8,
+    borderRadius: 6,
+    textAlign: 'center',
+    color: '#fff',
+  },
+
+  previewCard: {
+    backgroundColor: COLORS.surface,
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+
+  previewTitle: {
+    color: COLORS.text,
+    fontWeight: 'bold',
+  },
+
+  previewSub: {
+    color: COLORS.textSecondary,
+  },
+
 });

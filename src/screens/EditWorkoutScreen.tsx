@@ -6,17 +6,13 @@ import {
   Pressable,
   StyleSheet,
   ScrollView,
+  Alert,
 } from 'react-native';
 
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { COLORS, SPACING } from '../styles/theme';
-import { loadWorkouts } from '../utils/storage';
-import { updateWorkout, deleteWorkout } from '../utils/storage';
-import { Alert } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
-import { useCallback } from 'react';
+import { loadWorkouts, saveWorkouts } from '../utils/storage';
 import type { Workout } from '../types';
-
 
 export function EditWorkoutScreen() {
   const route = useRoute<any>();
@@ -25,6 +21,18 @@ export function EditWorkoutScreen() {
   const { workout } = route.params;
 
   const [sets, setSets] = useState(workout.sets);
+
+  // ✅ SAFE HELPER (handles old + new data)
+  const getExercisesSafe = (w: any) => {
+    return w.exercises ?? [
+      {
+        id: w.id,
+        name: w.exercise,
+        muscleGroup: w.muscleGroup,
+        sets: w.sets,
+      },
+    ];
+  };
 
   const updateSet = (index: number, field: 'reps' | 'weight', value: string) => {
     const updated = [...sets];
@@ -37,41 +45,67 @@ export function EditWorkoutScreen() {
   };
 
   const removeSet = (index: number) => {
-    setSets(sets.filter((_: any, i: any) => i !== index));
+    setSets(sets.filter((_: any, i: number) => i !== index));
   };
 
+  // 🔥 UPDATE EXERCISE INSIDE WORKOUT
   const handleSave = async () => {
-    await updateWorkout({
-      ...workout,
-      sets,
+    const workouts = await loadWorkouts();
+
+    const updatedWorkouts = workouts.map((w: Workout) => {
+      if (w.id !== workout.workoutId) return w;
+
+      return {
+        ...w,
+        exercises: w.exercises.map((ex) =>
+          ex.name === workout.exercise
+            ? { ...ex, sets }
+            : ex
+        ),
+      };
     });
 
+    await saveWorkouts(updatedWorkouts);
     navigation.goBack();
   };
 
   const handleDelete = async () => {
-    Alert.alert(
-      'Delete Workout',
-      'Are you sure?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            await deleteWorkout(workout.id);
-            navigation.goBack(); // ← THIS triggers refresh
-          },
+    Alert.alert('Delete Exercise', 'Are you sure?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          const workouts = await loadWorkouts();
+
+          const updatedWorkouts = workouts
+            .map((w: Workout) => {
+              if (w.id !== workout.workoutId) return w;
+
+              const updatedExercises = w.exercises.filter(
+                (ex) => ex.name !== workout.exercise // ✅ FIX
+              );
+
+              return {
+                ...w,
+                exercises: updatedExercises,
+              };
+            })
+            // remove workout if no exercises left
+            .filter((w) => w.exercises.length > 0);
+
+          await saveWorkouts(updatedWorkouts);
+          navigation.goBack();
         },
-      ]
-    );
+      },
+    ]);
   };
 
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>{workout.exercise}</Text>
 
-      {sets.map((set: any, i: any) => (
+      {sets.map((set: any, i: number) => (
         <View key={i} style={styles.row}>
           <TextInput
             style={styles.input}
@@ -79,6 +113,7 @@ export function EditWorkoutScreen() {
             keyboardType="numeric"
             onChangeText={(v) => updateSet(i, 'reps', v)}
           />
+
           <TextInput
             style={styles.input}
             value={String(set.weight)}
@@ -97,7 +132,7 @@ export function EditWorkoutScreen() {
       </Pressable>
 
       <Pressable style={styles.delete} onPress={handleDelete}>
-        <Text style={{ color: '#fff' }}>Delete Workout</Text>
+        <Text style={{ color: '#fff' }}>Delete Exercise</Text>
       </Pressable>
 
       <Pressable style={styles.save} onPress={handleSave}>
