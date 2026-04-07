@@ -7,11 +7,13 @@ import {
   TouchableOpacity,
   TextInput,
 } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Calendar } from 'react-native-calendars';
 import { WorkoutCard } from '../components/WorkoutCard';
 import { FAB } from '../components/FAB';
+
 import {
   loadWorkouts,
   loadBodyweight,
@@ -22,18 +24,14 @@ import {
 
 import { COLORS, globalStyles, SPACING, RADIUS } from '../styles/theme';
 import type { Workout, MuscleGroup, DayLog } from '../types';
+
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../App';
+
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const MUSCLE_GROUPS: MuscleGroup[] = [
-  'Chest',
-  'Back',
-  'Legs',
-  'Shoulders',
-  'Biceps',
-  'Triceps',
-  'Core',
+  'Chest', 'Back', 'Legs', 'Shoulders', 'Biceps', 'Triceps', 'Core'
 ];
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'HomeMain'>;
@@ -45,6 +43,8 @@ export function HomeScreen() {
   const [weightInput, setWeightInput] = useState('');
 
   const [selectedMuscle, setSelectedMuscle] = useState<MuscleGroup | 'All'>('All');
+
+  // ✅ keep as string (calendar format)
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split('T')[0]
   );
@@ -74,7 +74,6 @@ export function HomeScreen() {
     const existingLogs = await loadDayLogs();
     const workouts = await loadWorkouts();
 
-    // ❌ check if workout exists today
     const hasWorkout = workouts.some(
       w => w.date.split('T')[0] === today
     );
@@ -84,7 +83,6 @@ export function HomeScreen() {
       return;
     }
 
-    // ❌ check if rest already exists
     const hasRest = existingLogs.some(
       log =>
         log.type === 'rest' &&
@@ -96,15 +94,13 @@ export function HomeScreen() {
       return;
     }
 
-    // ✅ add rest
     const newLog: DayLog = {
       date: new Date().toISOString(),
       type: 'rest',
     };
 
     await saveDayLogs([newLog, ...existingLogs]);
-
-    fetchData(); // refresh
+    fetchData();
   };
 
   // 🔥 BODYWEIGHT
@@ -116,11 +112,10 @@ export function HomeScreen() {
     fetchData();
   };
 
-  // 🔥 CALENDAR DOTS (WORKOUT + REST)
+  // 🔥 CALENDAR MARKING
   const markedDates = useMemo(() => {
     const marked: any = {};
 
-    // workouts
     workouts.forEach(w => {
       const date = w.date.split('T')[0];
 
@@ -131,9 +126,7 @@ export function HomeScreen() {
       ];
 
       uniqueMuscles.forEach(muscle => {
-        const exists = marked[date].dots.some((d: any) => d.key === muscle);
-
-        if (!exists) {
+        if (!marked[date].dots.some((d: any) => d.key === muscle)) {
           marked[date].dots.push({
             key: muscle,
             color: COLORS.muscleGroups[muscle],
@@ -142,7 +135,6 @@ export function HomeScreen() {
       });
     });
 
-    // rest days
     logs.forEach(log => {
       if (log.type === 'rest') {
         const date = log.date.split('T')[0];
@@ -156,7 +148,6 @@ export function HomeScreen() {
       }
     });
 
-    // selected
     if (!marked[selectedDate]) marked[selectedDate] = { dots: [] };
 
     marked[selectedDate].selected = true;
@@ -180,6 +171,7 @@ export function HomeScreen() {
 
   return (
     <SafeAreaView style={globalStyles.container}>
+
       {/* HEADER */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -210,7 +202,7 @@ export function HomeScreen() {
         keyExtractor={(w, i) => `${w.id}-${i}`}
         ListHeaderComponent={
           <>
-            {/* 🔥 BODYWEIGHT */}
+            {/* BODYWEIGHT */}
             <View style={styles.weightCard}>
               <Text style={styles.weightTitle}>Bodyweight</Text>
 
@@ -237,30 +229,21 @@ export function HomeScreen() {
               </View>
             </View>
 
-            {/* 🔥 REST BUTTON */}
+            {/* REST */}
             <TouchableOpacity
               style={styles.restBtn}
               onPress={addRestDay}
-              activeOpacity={0.7}
             >
               <Text style={styles.restBtnText}>Rest Day</Text>
             </TouchableOpacity>
 
-            {/* 📅 CALENDAR */}
+            {/* CALENDAR */}
             <View style={styles.calendarWrapper}>
               <Calendar
                 current={selectedDate}
                 markingType="multi-dot"
                 markedDates={markedDates}
                 onDayPress={d => setSelectedDate(d.dateString)}
-                theme={{
-                  backgroundColor: COLORS.background,
-                  calendarBackground: COLORS.surface,
-                  dayTextColor: COLORS.text,
-                  monthTextColor: COLORS.text,
-                  selectedDayBackgroundColor: COLORS.accent,
-                  todayTextColor: COLORS.accent,
-                }}
               />
             </View>
           </>
@@ -275,7 +258,15 @@ export function HomeScreen() {
         }
       />
 
-      <FAB onPress={() => navigation.navigate('Add')} />
+      {/* ✅ FIXED FAB */}
+      <FAB
+        onPress={() =>
+          navigation.navigate('Add', {
+            date: selectedDate // ✅ FIXED (NO toISOString)
+          })
+        }
+      />
+
     </SafeAreaView>
   );
 }

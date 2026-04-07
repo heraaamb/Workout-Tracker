@@ -6,7 +6,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { HomeScreen } from './src/screens/HomeScreen';
 import { AddWorkoutScreen } from './src/screens/AddWorkoutScreen';
-import { MuscleProgressScreen } from './src/screens/MuscleProgressScreen';
+import { PerformanceDashboardScreen } from './src/screens/PerformanceDashboardScreen';
 import { EditWorkoutScreen } from './src/screens/EditWorkoutScreen';
 import { COLORS } from './src/styles/theme';
 import { MuscleGroup } from './src/types';
@@ -19,7 +19,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export type RootStackParamList = {
   Weight: undefined;
   HomeMain: undefined;
-  Add: undefined;
+  Add: { date?: string | Date };
   Progress: undefined;
   ExerciseManager: undefined;
 
@@ -74,7 +74,7 @@ function Tabs() {
           }
 
           if (route.name === 'Progress') {
-            return <MaterialCommunityIcons name="chart-bar" size={size} color={color} />;
+            return <MaterialCommunityIcons name="chart-line" size={size} color={color} />;
           }
 
           if (route.name === 'Add') {
@@ -97,7 +97,7 @@ function Tabs() {
 
       <Tab.Screen name="Add" component={AddWorkoutScreen} />
 
-      <Tab.Screen name="Progress" component={MuscleProgressScreen} />
+      <Tab.Screen name="Progress" component={PerformanceDashboardScreen} />
 
       <Tab.Screen name="Weight" component={WeightHistoryScreen} />
 
