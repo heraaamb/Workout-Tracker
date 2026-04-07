@@ -7,6 +7,7 @@ import {
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Swipeable } from 'react-native-gesture-handler';
+import * as Notifications from 'expo-notifications';
 
 import {
   getExercises,
@@ -42,12 +43,20 @@ export function AddWorkoutScreen() {
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [showPicker, setShowPicker] = useState(false);
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredExercises, setFilteredExercises] = useState<string[]>([]);
+
   const [workoutExercises, setWorkoutExercises] = useState<WorkoutExercise[]>([]);
   const [editingWorkoutId, setEditingWorkoutId] = useState<string | null>(null);
 
   const [muscleGroup, setMuscleGroup] = useState<MuscleGroup | ''>('');
   const [exercise, setExercise] = useState('');
   const [sets, setSets] = useState<WorkoutSet[]>([{ reps: 0, weight: 0 }]);
+
+  const [inputTime, setInputTime] = useState('60'); // user input
+  const [endTime, setEndTime] = useState<number | null>(null);
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [isRunning, setIsRunning] = useState(false);
 
   const [exerciseList, setExerciseList] = useState<StoredExercise[]>([]);
 
@@ -56,6 +65,73 @@ export function AddWorkoutScreen() {
       getExercises().then(setExerciseList);
     }, [])
   );
+
+  // ⏱️ REST TIMER
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!endTime || !isRunning) return;
+
+      const remaining = Math.max(
+        0,
+        Math.floor((endTime - Date.now()) / 1000)
+      );
+
+      setTimeLeft(remaining);
+
+      if (remaining === 0) {
+        setEndTime(null);
+        setIsRunning(false);
+      }
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [endTime, isRunning]);
+
+  // 🔥 START REST TIMER
+  const startTimer = async () => {
+    const seconds = parseInt(inputTime);
+
+    if (!seconds || seconds <= 0) {
+      Alert.alert('Enter valid time');
+      return;
+    }
+
+    const end = Date.now() + seconds * 1000;
+    setEndTime(end);
+    setIsRunning(true);
+
+    // cancel old notifications
+    await Notifications.cancelAllScheduledNotificationsAsync();
+
+    // schedule new notification
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "Rest Done 💪",
+        body: "Start your next set",
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: Math.max(1, seconds),
+        repeats: false,
+      },
+    });
+  };
+  // 🔥 STOP REST TIMER
+  const stopTimer = async () => {
+    setEndTime(null);
+    setTimeLeft(0);
+    await Notifications.cancelAllScheduledNotificationsAsync();
+  };
+  // 🔥 PAUSE & RESUME (if you want to add these later)
+  const pauseTimer = () => setIsRunning(false);
+  // resume
+  const resumeTimer = () => setIsRunning(true);
+  // 🔥 RESET TIMER
+  const resetTimer = () => {
+    setEndTime(null);
+    setTimeLeft(0);
+    setIsRunning(false);
+  };
 
   // 🔥 LOAD EXISTING WORKOUT
   useEffect(() => {
@@ -255,12 +331,27 @@ export function AddWorkoutScreen() {
     : [];
 
   const uniqueExercises = [...new Set(availableExercises)];
+  useEffect(() => {
+    if (!muscleGroup) return;
+
+    if (!searchQuery.trim()) {
+      setFilteredExercises(uniqueExercises);
+    } else {
+      const filtered = uniqueExercises.filter(ex =>
+        ex.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredExercises(filtered);
+    }
+  }, [searchQuery, muscleGroup, exerciseList]);
 
   const isExerciseValid =
     muscleGroup !== '' &&
     exercise !== '' &&
     sets.every(s => s.reps > 0 && s.weight > 0);
 
+  useEffect(() => {
+    setSearchQuery('');
+  }, [muscleGroup]);
   return (
     <KeyboardAvoidingView
       style={globalStyles.container}
@@ -376,19 +467,55 @@ export function AddWorkoutScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Exercise</Text>
 
-            <View style={styles.exerciseGrid}>
-              {uniqueExercises.map((ex, i) => (
-                <Pressable
-                  key={i}
-                  style={[
-                    styles.exerciseCard,
-                    exercise === ex && styles.exerciseSelected
-                  ]}
-                  onPress={() => setExercise(ex)}
-                >
-                  <Text style={styles.exerciseText}>{ex}</Text>
-                </Pressable>
-              ))}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Exercise</Text>
+
+              {/* 🔍 SEARCH INPUT */}
+              <TextInput
+                placeholder="Search exercise..."
+                placeholderTextColor="#888"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                style={{
+                  backgroundColor: '#1E1E1E',
+                  padding: 12,
+                  borderRadius: 10,
+                  color: '#fff',
+                  marginBottom: 10,
+                  borderWidth: 1,
+                  borderColor: '#333',
+                }}
+              />
+
+              {/* 🔽 RESULTS */}
+              <View style={{ maxHeight: 200 }}>
+                {filteredExercises.length === 0 ? (
+                  <Text style={{ color: '#888' }}>No exercises found</Text>
+                ) : (
+                  filteredExercises.map((ex, i) => (
+                    <Pressable
+                      key={i}
+                      style={{
+                        padding: 12,
+                        backgroundColor:
+                          exercise === ex ? COLORS.accent : '#1E1E1E',
+                        borderRadius: 10,
+                        marginBottom: 6,
+                        borderWidth: 1,
+                        borderColor: '#333',
+                      }}
+                      onPress={() => {
+                        setExercise(ex);
+                        setSearchQuery('');
+                      }}
+                    >
+                      <Text style={{ color: '#fff', fontWeight: '600' }}>
+                        {ex}
+                      </Text>
+                    </Pressable>
+                  ))
+                )}
+              </View>
             </View>
           </View>
         )}
@@ -438,6 +565,66 @@ export function AddWorkoutScreen() {
             </Pressable>
           </View>
         )}
+
+        /// REST TIMER
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Rest Timer</Text>
+
+          {/* INPUT */}
+          <TextInput
+            value={inputTime}
+            onChangeText={setInputTime}
+            keyboardType="numeric"
+            placeholder="Seconds (e.g. 60)"
+            placeholderTextColor="#888"
+            style={{
+              backgroundColor: '#1E1E1E',
+              padding: 12,
+              borderRadius: 10,
+              color: '#fff',
+              marginBottom: 12,
+              borderWidth: 1,
+              borderColor: '#333',
+            }}
+          />
+
+          {/* 🔥 QUICK PRESETS */}
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+            {[30, 60, 90].map(t => (
+              <Pressable
+                key={t}
+                onPress={() => setInputTime(String(t))}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 20,
+                  backgroundColor: '#1E1E1E',
+                  borderWidth: 1,
+                  borderColor: '#333',
+                }}
+              >
+                <Text style={{ color: '#ccc', fontWeight: '600' }}>{t}s</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {/* 🔥 CONTROLS */}
+          <View style={{ flexDirection: 'row', gap: 20 }}>
+            {!isRunning ? (
+              <Pressable onPress={startTimer}>
+                <Text style={{ color: '#4CAF50', fontWeight: 'bold' }}>Start</Text>
+              </Pressable>
+            ) : (
+              <Pressable onPress={pauseTimer}>
+                <Text style={{ color: '#FFC107', fontWeight: 'bold' }}>Pause</Text>
+              </Pressable>
+            )}
+
+            <Pressable onPress={resetTimer}>
+              <Text style={{ color: '#FF5252', fontWeight: 'bold' }}>Reset</Text>
+            </Pressable>
+          </View>
+        </View>
 
         {/* PREVIEW */}
         {workoutExercises.length > 0 && (
@@ -496,7 +683,68 @@ export function AddWorkoutScreen() {
           </Text>
         </Pressable>
       )}
+      {(timeLeft > 0 || isRunning) && (
+        <View style={{
+          position: 'absolute',
+          bottom: 100,
+          left: 20,
+          right: 20,
+          backgroundColor: '#121212',
+          padding: 20,
+          borderRadius: 20,
+          alignItems: 'center',
+          borderWidth: 1,
+          borderColor: '#333',
+        }}>
+          <Text style={{ color: '#888', fontSize: 12, letterSpacing: 2 }}>
+            REST
+          </Text>
+
+          <View style={{
+            width: 120,
+            height: 120,
+            borderRadius: 60,
+            borderWidth: 4,
+            borderColor: COLORS.accent,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginVertical: 10,
+          }}>
+            <Text style={{
+              fontSize: 32,
+              fontWeight: 'bold',
+              color: '#fff'
+            }}>
+              {timeLeft}s
+            </Text>
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 30 }}>
+            {!isRunning ? (
+              <Pressable onPress={resumeTimer}>
+                <Text style={{ color: '#4CAF50', fontWeight: 'bold' }}>
+                  Start
+                </Text>
+              </Pressable>
+            ) : (
+              <Pressable onPress={pauseTimer}>
+                <Text style={{ color: '#FFC107', fontWeight: 'bold' }}>
+                  Pause
+                </Text>
+              </Pressable>
+            )}
+
+            <Pressable onPress={resetTimer}>
+              <Text style={{ color: '#FF5252', fontWeight: 'bold' }}>
+                Reset
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
     </KeyboardAvoidingView>
+    
+    
   );
 }
 

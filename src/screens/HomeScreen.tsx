@@ -244,6 +244,32 @@ export function HomeScreen() {
                 markingType="multi-dot"
                 markedDates={markedDates}
                 onDayPress={d => setSelectedDate(d.dateString)}
+
+                theme={{
+                  backgroundColor: '#1E1E1E',
+                  calendarBackground: '#1E1E1E',
+
+                  textSectionTitleColor: '#888', // weekdays (Mon, Tue)
+
+                  dayTextColor: '#fff',
+                  todayTextColor: COLORS.accent,
+                  selectedDayTextColor: '#fff',
+
+                  monthTextColor: '#fff',
+
+                  arrowColor: COLORS.accent,
+
+                  textDisabledColor: '#444',
+
+                  dotColor: COLORS.accent,
+                  selectedDotColor: '#fff',
+
+                  indicatorColor: COLORS.accent,
+
+                  textDayFontWeight: '500',
+                  textMonthFontWeight: 'bold',
+                  textDayHeaderFontWeight: '500',
+                }}
               />
             </View>
           </>
