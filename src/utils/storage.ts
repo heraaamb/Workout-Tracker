@@ -85,17 +85,32 @@ export const clearWorkouts = async (): Promise<void> => {
   }
 };
 
-export const getExercises = async (): Promise<string[]> => {
+type StoredExercise = {
+  name: string;
+  muscleGroup: string;
+};
+
+export const getExercises = async (): Promise<StoredExercise[]> => {
   const data = await AsyncStorage.getItem(EXERCISES_KEY);
   return data ? JSON.parse(data) : [];
 };
 
-export const saveExercise = async (exercise: string) => {
+export const saveExercise = async (exercise: string, muscleGroup: string) => {
   const existing = await getExercises();
 
-  const updated = Array.from(
-    new Set([...existing, exercise.trim()])
-  );
+  const newExercise: StoredExercise = {
+    name: exercise.trim(),
+    muscleGroup,
+  };
+
+  const updated = [
+    ...existing.filter(
+      ex =>
+        !(ex.name.toLowerCase() === newExercise.name.toLowerCase() &&
+          ex.muscleGroup === muscleGroup)
+    ),
+    newExercise,
+  ];
 
   await AsyncStorage.setItem(EXERCISES_KEY, JSON.stringify(updated));
 };

@@ -138,36 +138,59 @@ export function MuscleDetailScreen() {
             Max: {day.maxWeight} kg
           </Text>
 
-          {day.exercises.map((ex, exIdx) => (
-            <View key={`ex-${exIdx}`} style={styles.exContainer}>
-              <Text style={styles.exName}>{ex.name}</Text>
+          {day.exercises.map((ex, exIdx) => {
+            const maxWeight = Math.max(...ex.sets.map(s => s.weight));
 
-              <View style={styles.setRow}>
+            return (
+              <View key={`ex-${exIdx}`} style={styles.exContainer}>
+                <Text style={styles.exName}>{ex.name}</Text>
+
+                {/* HEADER */}
+                <View style={styles.setHeader}>
+                  <Text style={styles.setHeaderText}>Set</Text>
+                  <Text style={styles.setHeaderText}>Reps</Text>
+                  <Text style={styles.setHeaderText}>Weight</Text>
+                </View>
+
+                {/* SETS */}
                 {ex.sets.map((set, i) => (
-                  <Text key={`set-${i}`} style={styles.setChip}>
-                    {set.reps}×{set.weight}
-                  </Text>
-                ))}
-              </View>
+                  <View key={`set-${i}`} style={styles.setRowClean}>
+                    <Text style={styles.setIndex}>{i + 1}</Text>
 
-              <Text
-                style={styles.editButton}
-                onPress={() =>
-                  navigation.navigate('EditWorkout', {
-                    workout: {
-                      id: ex.id,
-                      date: day.date,
-                      muscleGroup: muscle as MuscleGroup,
-                      exercise: ex.name,
-                      sets: ex.sets,
-                    },
-                  })
-                }
-              >
-                Edit
-              </Text>
-            </View>
-          ))}
+                    <Text style={styles.setValue}>
+                      {set.reps}
+                    </Text>
+
+                    <Text
+                      style={[
+                        styles.setValue,
+                        set.weight === maxWeight && { color: COLORS.accent }
+                      ]}
+                    >
+                      {set.weight} kg
+                    </Text>
+                  </View>
+                ))}
+
+                <Text
+                  style={styles.editButton}
+                  onPress={() =>
+                    navigation.navigate('EditWorkout', {
+                      workout: {
+                        id: ex.id,
+                        date: day.date,
+                        muscleGroup: muscle as MuscleGroup,
+                        exercise: ex.name,
+                        sets: ex.sets,
+                      },
+                    })
+                  }
+                >
+                  Edit
+                </Text>
+              </View>
+            );
+          })}
         </View>
       ))}
     </ScrollView>
@@ -272,5 +295,40 @@ const styles = StyleSheet.create({
   editButton: {
     color: COLORS.accent,
     marginTop: 4,
+  },
+
+  setHeader: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    paddingBottom: 4,
+    marginBottom: 6,
+  },
+
+  setHeaderText: {
+    flex: 1,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+
+  setRowClean: {
+    flexDirection: 'row',
+    paddingVertical: 6,
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.border,
+  },
+
+  setIndex: {
+    flex: 1,
+    textAlign: 'center',
+    color: COLORS.textSecondary,
+  },
+
+  setValue: {
+    flex: 1,
+    textAlign: 'center',
+    fontWeight: '600',
+    color: COLORS.text,
   },
 });

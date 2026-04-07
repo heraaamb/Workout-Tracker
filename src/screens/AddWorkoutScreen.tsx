@@ -18,8 +18,13 @@ export function AddWorkoutScreen() {
   const [exercise, setExercise] = useState('');
   const [sets, setSets] = useState<WorkoutSet[]>([{ reps: 0, weight: 0 }]);
 
-  const [exerciseList, setExerciseList] = useState<string[]>([]);
-  const [newExercise, setNewExercise] = useState('');
+type StoredExercise = {
+  name: string;
+  muscleGroup: string;
+};
+
+const [exerciseList, setExerciseList] = useState<StoredExercise[]>([]);
+const [newExercise, setNewExercise] = useState('');
 
   /* ---------------- LOAD EXERCISES ---------------- */
 
@@ -32,7 +37,7 @@ export function AddWorkoutScreen() {
   const handleAddExercise = async () => {
     if (!newExercise.trim() || !muscleGroup) return;
 
-    await saveExercise(newExercise.trim());
+    await saveExercise(newExercise.trim(), muscleGroup);
 
     const updated = await getExercises();
     setExerciseList(updated);
@@ -46,7 +51,9 @@ export function AddWorkoutScreen() {
   const availableExercises = muscleGroup
     ? [
         ...(EXERCISES_BY_MUSCLE[muscleGroup] || []),
-        ...exerciseList,
+        ...exerciseList
+          .filter(ex => ex.muscleGroup === muscleGroup)
+          .map(ex => ex.name),
       ]
     : [];
 
@@ -241,6 +248,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
+  },
+
+  muscleGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
   },
 
   exerciseList: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
