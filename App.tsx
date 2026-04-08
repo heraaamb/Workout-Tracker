@@ -20,7 +20,7 @@ export type RootStackParamList = {
   Weight: undefined;
   HomeMain: undefined;
   Add: { date?: string | Date };
-  Progress: undefined;
+  Performance: undefined;
   ExerciseManager: undefined;
 
   MuscleDetail: {
@@ -73,8 +73,8 @@ function Tabs() {
             return <MaterialCommunityIcons name="home" size={size} color={color} />;
           }
 
-          if (route.name === 'Progress') {
-            return <MaterialCommunityIcons name="chart-line" size={size} color={color} />;
+          if (route.name === 'Performance') {
+            return <MaterialCommunityIcons name="chart-bar" size={size} color={color} />;
           }
 
           if (route.name === 'Add') {
@@ -97,7 +97,7 @@ function Tabs() {
 
       <Tab.Screen name="Add" component={AddWorkoutScreen} />
 
-      <Tab.Screen name="Progress" component={PerformanceDashboardScreen} />
+      <Tab.Screen name="Performance" component={PerformanceDashboardScreen} />
 
       <Tab.Screen name="Weight" component={WeightHistoryScreen} />
 

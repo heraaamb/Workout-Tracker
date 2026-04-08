@@ -165,8 +165,11 @@ export function MuscleDetailScreen() {
           </Text>
 
           {day.exercises.map((ex, exIdx) => {
-            const maxWeight = Math.max(...ex.sets.map(s => s.weight));
+            const weights = ex.sets
+              .map(s => Number(s.weight))
+              .filter(w => !isNaN(w));
 
+            const maxWeight = weights.length > 0 ? Math.max(...weights) : 0;
             return (
               <View key={`ex-${exIdx}`} style={styles.exContainer}>
                 <Text style={styles.exName}>{ex.name}</Text>
@@ -186,7 +189,9 @@ export function MuscleDetailScreen() {
                     <Text
                       style={[
                         styles.setValue,
-                        set.weight === maxWeight && { color: COLORS.accent }
+                        !isNaN(Number(set.weight)) &&
+                        Number(set.weight) === maxWeight &&
+                        { color: COLORS.accent }
                       ]}
                     >
                       {set.weight} kg
@@ -212,7 +217,10 @@ export function MuscleDetailScreen() {
                         date: day.date,
                         muscleGroup: details.muscleGroup,
                         exercise: ex.name,
-                        sets: ex.sets,
+                        sets: ex.sets.map(s => ({
+                          reps: Number(s.reps) || 0,
+                          weight: Number(s.weight) || 0
+                        }))
                       },
                     });
                   }}

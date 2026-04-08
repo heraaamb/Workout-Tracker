@@ -1,8 +1,9 @@
 export type MuscleGroup = 'Chest' | 'Back' | 'Legs' | 'Shoulders' | 'Biceps' | 'Triceps' | 'Core';
 
-export type WorkoutSet = {
-  reps: number;
-  weight: number;
+type WorkoutSet = {
+  id: string;
+  reps: string;
+  weight: string;
 };
 
 export type WorkoutExercise = {

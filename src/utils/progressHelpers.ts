@@ -28,7 +28,11 @@ export const getTotalVolume = (workouts: Workout[], muscle: MuscleGroup): number
       const wVol = w.exercises
         .filter(ex => ex.muscleGroup === muscle)
         .reduce((exVol, ex) => {
-          return exVol + ex.sets.reduce((sum, set) => sum + (set.reps * set.weight), 0);
+          return exVol + ex.sets.reduce((sum, set) => {
+            const reps = Number(set.reps) || 0;
+            const weight = Number(set.weight) || 0;
+            return sum + reps * weight;
+          }, 0);
         }, 0);
       return totalVol + wVol;
     }, 0);
@@ -68,7 +72,11 @@ export const getMuscleHistory = (workouts: Workout[], muscle: MuscleGroup) => {
           sets: ex.sets,
         })),
         maxWeight: Math.max(
-          ...exercises.flatMap(ex => ex.sets.map(s => s.weight))
+          ...exercises.flatMap(ex =>
+            ex.sets
+              .map(s => Number(s.weight))
+              .filter(w => !isNaN(w))
+          )
         ),
       };
     })
@@ -118,11 +126,12 @@ export const getExercisePRs = (workouts: Workout[], muscle: MuscleGroup) => {
       .filter(ex => ex.muscleGroup === muscle)
       .forEach(ex => {
         ex.sets.forEach(set => {
-          if (!prs[ex.name] || set.weight > prs[ex.name]) {
-            prs[ex.name] = set.weight;
-          }
-        });
-      });
+              const weight = Number(set.weight) || 0;
+              if (!prs[ex.name] || weight > prs[ex.name]) {
+                prs[ex.name] = weight;
+              }
+            });
+          });
   });
 
   return prs;
@@ -148,7 +157,8 @@ export const getMaxWeight = (workouts: Workout[], muscle: MuscleGroup) => {
       .filter(ex => ex.muscleGroup === muscle)
       .forEach(ex => {
         ex.sets.forEach(set => {
-          if (set.weight > max) max = set.weight;
+          const weight = Number(set.weight) || 0;
+          if (weight > max) max = weight;
         });
       });
   });
@@ -166,7 +176,8 @@ export const getAvgWeight = (workouts: Workout[], muscle: MuscleGroup) => {
       .filter(ex => ex.muscleGroup === muscle)
       .forEach(ex => {
         ex.sets.forEach(set => {
-          total += set.weight;
+          const weight = Number(set.weight) || 0;
+          total += weight;
           count++;
         });
       });
@@ -184,7 +195,7 @@ export const getExerciseHistory = (
     .filter(w => w.exercises.some(ex => ex.muscleGroup === muscle && ex.name === exercise))
     .map(w => {
       const ex = w.exercises.find(ex => ex.muscleGroup === muscle && ex.name === exercise)!;
-      const maxWeight = Math.max(...ex.sets.map(s => s.weight));
+      const maxWeight = Math.max(...ex.sets.map(s => Number(s.weight)).filter(w => !isNaN(w)));
 
       return {
         date: w.date,

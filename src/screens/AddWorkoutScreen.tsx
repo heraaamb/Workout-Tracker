@@ -9,9 +9,12 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Swipeable } from 'react-native-gesture-handler';
 import * as Notifications from 'expo-notifications';
 
+
 import {
   getExercises,
+  loadDayLogs,
   loadWorkouts,
+  saveDayLogs,
   saveWorkouts
 } from '../utils/storage';
 
@@ -20,11 +23,13 @@ import { COLORS, globalStyles, RADIUS, SPACING } from '../styles/theme';
 
 import type {
   MuscleGroup,
-  WorkoutSet,
   WorkoutExercise,
   Workout,
   StoredExercise
 } from '../types';
+
+import Svg, { Circle } from 'react-native-svg';
+
 
 const MUSCLE_GROUPS: MuscleGroup[] = [
   'Chest', 'Back', 'Legs', 'Shoulders', 'Biceps', 'Triceps', 'Core'
@@ -51,12 +56,14 @@ export function AddWorkoutScreen() {
 
   const [muscleGroup, setMuscleGroup] = useState<MuscleGroup | ''>('');
   const [exercise, setExercise] = useState('');
-  const [sets, setSets] = useState<WorkoutSet[]>([{ reps: 0, weight: 0 }]);
-
+  const [sets, setSets] = useState([{ id: Date.now().toString(), reps: '', weight: '' }]);
   const [inputTime, setInputTime] = useState('60'); // user input
   const [endTime, setEndTime] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
+  const [hasLoggedSet, setHasLoggedSet] = useState(false);
+  const [loggedSets, setLoggedSets] = useState<number[]>([]); 
+  const [showCustomInput, setShowCustomInput] = useState(false);
 
   const [exerciseList, setExerciseList] = useState<StoredExercise[]>([]);
 
@@ -132,6 +139,7 @@ export function AddWorkoutScreen() {
     setTimeLeft(0);
     setIsRunning(false);
   };
+  
 
   // 🔥 LOAD EXISTING WORKOUT
   useEffect(() => {
@@ -139,7 +147,7 @@ export function AddWorkoutScreen() {
       const workouts = await loadWorkouts();
 
       const found = workouts.find(w =>
-        new Date(w.date).toDateString() === selectedDate.toDateString()
+        w.date === getLocalDate(selectedDate)
       );
 
       if (found) {
@@ -153,21 +161,45 @@ export function AddWorkoutScreen() {
 
   // 🔥 SET HANDLERS
   const handleAddSet = () => {
-    setSets(prev => [...prev, { reps: 0, weight: 0 }]);
+    setSets(prev => [
+      ...prev,
+      { id: Date.now().toString(), reps: '', weight: '' }
+    ]);
   };
 
-  const handleSetChange = (index: number, field: 'reps' | 'weight', value: string) => {
+  const handleSetChange = (
+    index: number,
+    field: 'reps' | 'weight',
+    value: string
+  ) => {
     const newSets = [...sets];
-    const parsed = value === '' ? 0 : parseFloat(value);
-    newSets[index][field] = isNaN(parsed) ? 0 : parsed;
+    newSets[index][field] = value; // ✅ store raw input
     setSets(newSets);
   };
 
+  const handleLogSet = async (index: number) => {
+    if (loggedSets.includes(index)) return;
+    setLoggedSets(prev => [...prev, index]);
+
+    const set = sets[index];
+
+    // ❌ prevent empty sets
+    if (!set.reps || !set.weight) {
+      Alert.alert('Fill reps & weight first');
+      return;
+    }
+
+    // ✅ mark timer visible
+    setHasLoggedSet(true);
+
+    // 🔥 restart timer every set
+    await startTimer();
+  };
+
   const handleDeleteSet = (index: number) => {
-    setSets(prev => {
-      if (prev.length === 1) return prev;
-      return prev.filter((_, i) => i !== index);
-    });
+    setTimeout(() => {
+      setSets(prev => prev.filter((_, i) => i !== index));
+    }, 100);
   };
 
   const renderRightActions = (index: number) => (
@@ -179,8 +211,8 @@ export function AddWorkoutScreen() {
     </Pressable>
   );
 
-  const handleAddExerciseToWorkout = () => {
-    if (!muscleGroup || !exercise || sets.some(s => s.reps === 0 || s.weight === 0)) return;
+  const handleAddExerciseToWorkout = async () => {
+    if (!muscleGroup || !exercise || sets.some(s => s.reps === '' || s.weight === '')) return;
 
     if (editingExerciseIndex !== null) {
       // 🔥 UPDATE EXISTING
@@ -203,21 +235,49 @@ export function AddWorkoutScreen() {
 
     // reset form
     setExercise('');
-    setSets([{ reps: 0, weight: 0 }]);
-  };
+    setSets([
+      { id: Date.now().toString(), reps: '', weight: '' }
+    ]);  };
+
+  const getLocalDate = (date = new Date()) =>
+  date.toLocaleDateString('en-CA');
 
   // 🔥 DELETE WORKOUT
   const handleDelete = async () => {
     Alert.alert('Delete Workout', 'Are you sure?', [
-      { text: 'Cancel' },
+      { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          const workouts = await loadWorkouts();
-          const filtered = workouts.filter(w => w.id !== editingWorkoutId);
-          await saveWorkouts(filtered);
-          navigation.goBack();
+          try {
+            const workouts = await loadWorkouts();
+            const logs = await loadDayLogs();
+
+            const workoutToDelete = workouts.find(
+              w => w.id === editingWorkoutId
+            );
+
+            if (!workoutToDelete) return;
+
+            const workoutDate = workoutToDelete.date; // ✅ FIXED
+
+            const updatedWorkouts = workouts.filter(
+              w => w.id !== editingWorkoutId
+            );
+
+            const updatedLogs = logs.filter(
+              log => !(log.type === 'rest' && log.date === workoutDate)
+            );
+
+            await saveWorkouts(updatedWorkouts);
+            await saveDayLogs(updatedLogs);
+
+            navigation.goBack();
+          } catch (err) {
+            console.error(err);
+            Alert.alert('Error deleting workout');
+          }
         }
       }
     ]);
@@ -229,20 +289,20 @@ export function AddWorkoutScreen() {
 
     const existing = await loadWorkouts();
 
-    const sameDateWorkout = existing.find(w =>
-      new Date(w.date).toDateString() === selectedDate.toDateString()
-    );
+    const localDate = getLocalDate(selectedDate);
+
+    const sameDateWorkout = existing.find(w => w.date === localDate);
 
     const newWorkout: Workout = {
       id: Date.now().toString(),
-      date: selectedDate.toISOString(),
+      date: localDate, // ✅ FIXED
       exercises: workoutExercises,
     };
 
     if (editingWorkoutId) {
       const updated = existing.map(w =>
         w.id === editingWorkoutId
-          ? { ...w, exercises: workoutExercises, date: selectedDate.toISOString() }
+          ? { ...w, exercises: workoutExercises, date: localDate } // ✅ FIXED
           : w
       );
 
@@ -295,26 +355,27 @@ export function AddWorkoutScreen() {
     </Pressable>
   );
 
+  // 🔥 AUTO-SAVE ON DATE CHANGE
   const autoSaveWorkout = async () => {
     if (workoutExercises.length === 0) return;
 
     const existing = await loadWorkouts();
 
+    const localDate = getLocalDate(selectedDate);
+
     const newWorkout: Workout = {
       id: editingWorkoutId || Date.now().toString(),
-      date: selectedDate.toISOString(),
+      date: localDate, // ✅ FIXED
       exercises: workoutExercises,
     };
 
     let updated;
 
     if (editingWorkoutId) {
-      // update existing
       updated = existing.map(w =>
         w.id === editingWorkoutId ? newWorkout : w
       );
     } else {
-      // create new
       updated = [newWorkout, ...existing];
     }
 
@@ -347,11 +408,20 @@ export function AddWorkoutScreen() {
   const isExerciseValid =
     muscleGroup !== '' &&
     exercise !== '' &&
-    sets.every(s => s.reps > 0 && s.weight > 0);
+    sets.every(s => Number(s.reps) > 0 && Number(s.weight) > 0);
 
   useEffect(() => {
     setSearchQuery('');
   }, [muscleGroup]);
+  
+    const radius = 50;
+    const strokeWidth = 6;
+    const circumference = 2 * Math.PI * radius;
+
+    const totalTime = parseInt(inputTime) || 1;
+    const progress = timeLeft / totalTime;
+
+
   return (
     <KeyboardAvoidingView
       style={globalStyles.container}
@@ -389,7 +459,7 @@ export function AddWorkoutScreen() {
               const workouts = await loadWorkouts();
 
               const found = workouts.find(w =>
-                new Date(w.date).toDateString() === newDate.toDateString()
+                w.date === getLocalDate(selectedDate)
               );
 
               if (found) {
@@ -409,17 +479,20 @@ export function AddWorkoutScreen() {
           <Pressable
             style={styles.clearBtn}
             onPress={() => {
-              Alert.alert('Clear Workout', 'Remove all exercises?', [
-                { text: 'Cancel' },
-                {
-                  text: 'Clear',
-                  style: 'destructive',
-                  onPress: () => {
-                    setWorkoutExercises([]);
-                    setEditingWorkoutId(null);
+              Alert.alert(
+                'Delete Workout',
+                'This will remove the workout and logs for this day',
+                [
+                  { text: 'Cancel' },
+                  {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                      handleDelete();
+                    }
                   }
-                }
-              ]);
+                ]
+              );
             }}
           >
             <Text style={styles.clearText}>Clear Existing Workout</Text>
@@ -467,55 +540,56 @@ export function AddWorkoutScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Exercise</Text>
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Exercise</Text>
+            {/* 🔍 ALWAYS VISIBLE SEARCH */}
+            <TextInput
+              placeholder="Search exercise..."
+              placeholderTextColor="#888"
+              value={searchQuery}
+              onChangeText={(text) => {
+                setSearchQuery(text);
+                setExercise(text); // optional: live typing
+              }}
+              style={{
+                backgroundColor: '#1E1E1E',
+                padding: 12,
+                borderRadius: 10,
+                color: '#fff',
+                marginBottom: 10,
+                borderWidth: 1,
+                borderColor: '#333',
+              }}
+            />
 
-              {/* 🔍 SEARCH INPUT */}
-              <TextInput
-                placeholder="Search exercise..."
-                placeholderTextColor="#888"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                style={{
-                  backgroundColor: '#1E1E1E',
-                  padding: 12,
-                  borderRadius: 10,
-                  color: '#fff',
-                  marginBottom: 10,
-                  borderWidth: 1,
-                  borderColor: '#333',
-                }}
-              />
-
-              {/* 🔽 RESULTS */}
-              <View style={{ maxHeight: 200 }}>
-                {filteredExercises.length === 0 ? (
+            {/* 🔽 RESULTS */}
+            <View style={{ maxHeight: 200 }}>
+              {searchQuery.trim() !== '' && (
+                filteredExercises.length === 0 ? (
                   <Text style={{ color: '#888' }}>No exercises found</Text>
                 ) : (
-                  filteredExercises.map((ex, i) => (
-                    <Pressable
-                      key={i}
-                      style={{
-                        padding: 12,
-                        backgroundColor:
-                          exercise === ex ? COLORS.accent : '#1E1E1E',
-                        borderRadius: 10,
-                        marginBottom: 6,
-                        borderWidth: 1,
-                        borderColor: '#333',
-                      }}
-                      onPress={() => {
-                        setExercise(ex);
-                        setSearchQuery('');
-                      }}
-                    >
-                      <Text style={{ color: '#fff', fontWeight: '600' }}>
-                        {ex}
-                      </Text>
-                    </Pressable>
-                  ))
-                )}
-              </View>
+                  <ScrollView keyboardShouldPersistTaps="handled">
+                    {filteredExercises.map((ex, i) => (
+                      <Pressable
+                        key={i}
+                        onPress={() => {
+                          setExercise(ex);
+                          setSearchQuery(ex);
+                        }}
+                        style={{
+                          padding: 10,
+                          borderRadius: 8,
+                          marginBottom: 6,
+                          backgroundColor:
+                            exercise === ex ? COLORS.accent : '#1E1E1E',
+                        }}
+                      >
+                        <Text style={{ color: '#fff', fontWeight: '600' }}>
+                          {ex}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                )
+              )}
             </View>
           </View>
         )}
@@ -526,26 +600,47 @@ export function AddWorkoutScreen() {
             <Text style={styles.sectionTitle}>Sets</Text>
 
             {sets.map((set, i) => (
-              <Swipeable
-                key={i}
-                renderRightActions={() => renderRightActions(i)}
-              >
+                <Swipeable
+                  key={set.id}   // ✅ FIXED
+                  renderRightActions={() => renderRightActions(i)}
+                >
                 <View style={styles.setRow}>
                   <Text style={styles.setIndex}>{i + 1}</Text>
 
                   <TextInput
                     style={styles.setInput}
                     keyboardType="numeric"
+                    placeholder='Reps'
+                    placeholderTextColor={COLORS.textSecondary}
                     value={set.reps ? String(set.reps) : ''}
                     onChangeText={(v) => handleSetChange(i, 'reps', v)}
                   />
 
                   <TextInput
                     style={styles.setInput}
-                    keyboardType="numeric"
+                    keyboardType="decimal-pad"
+                    placeholder='Weight'
+                    placeholderTextColor={COLORS.textSecondary}
                     value={set.weight ? String(set.weight) : ''}
                     onChangeText={(v) => handleSetChange(i, 'weight', v)}
                   />
+
+                    {/* ✅ NEW LOG BUTTON */}
+                    <Pressable
+                      onPress={() => handleLogSet(i)}
+                      disabled={loggedSets.includes(i)}
+                      style={{
+                        backgroundColor: COLORS.accent,
+                        paddingHorizontal: 10,
+                        borderRadius: 6,
+                        justifyContent: 'center',
+                        opacity: loggedSets.includes(i) ? 0.4 : 1
+                      }}
+                    >
+                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>
+                      {loggedSets.includes(i) ? '✓✓' : '✓'}
+                    </Text>
+                  </Pressable>
                 </View>
               </Swipeable>
             ))}
@@ -554,77 +649,75 @@ export function AddWorkoutScreen() {
               <Text style={styles.addSet}>+ Add Set</Text>
             </Pressable>
 
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+            <Text style={{ color: '#888', marginRight: 10 }}>Rest</Text>
+
+            {[30, 60, 90].map(t => (
+              <Pressable
+                key={t}
+                onPress={() => setInputTime(String(t))}
+                style={{
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 20,
+                  backgroundColor: inputTime === String(t) ? COLORS.accent : '#1E1E1E',
+                  marginRight: 6,
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '600' }}>
+                  {t}s
+                </Text>
+              </Pressable>
+            ))}
+
+            {/* custom */}
+            <Pressable
+              onPress={() => setShowCustomInput(prev => !prev)} // ✅ THIS IS THE FIX
+              style={{
+                marginLeft: 6,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 8,
+              }}
+              hitSlop={10}
+              android_ripple={{ color: '#333', borderless: true }}
+            >
+              <Text style={{ color: COLORS.accent, fontWeight: '600' }}>
+                {showCustomInput ? 'Close' : '+ Custom'}
+              </Text>
+            </Pressable>
+            {showCustomInput && (
+              <TextInput
+                value={inputTime}
+                onChangeText={setInputTime}
+                keyboardType="number-pad"
+                placeholder="Enter seconds"
+                placeholderTextColor="#888"
+                style={{
+                  backgroundColor: '#1E1E1E',
+                  padding: 10,
+                  borderRadius: 8,
+                  color: '#fff',
+                  marginTop: 10,
+                  borderWidth: 1,
+                  borderColor: '#333',
+                }}
+              />
+            )}
+          </View>
+
             <Pressable
               style={[styles.addBtn, !isExerciseValid && { opacity: 0.5 }]}
               disabled={!isExerciseValid}
               onPress={handleAddExerciseToWorkout}
             >
+
               <Text style={styles.addBtnText}>
                 {editingExerciseIndex !== null ? 'Update Exercise' : 'Add Exercise'}
               </Text>
             </Pressable>
           </View>
         )}
-
-        /// REST TIMER
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Rest Timer</Text>
-
-          {/* INPUT */}
-          <TextInput
-            value={inputTime}
-            onChangeText={setInputTime}
-            keyboardType="numeric"
-            placeholder="Seconds (e.g. 60)"
-            placeholderTextColor="#888"
-            style={{
-              backgroundColor: '#1E1E1E',
-              padding: 12,
-              borderRadius: 10,
-              color: '#fff',
-              marginBottom: 12,
-              borderWidth: 1,
-              borderColor: '#333',
-            }}
-          />
-
-          {/* 🔥 QUICK PRESETS */}
-          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
-            {[30, 60, 90].map(t => (
-              <Pressable
-                key={t}
-                onPress={() => setInputTime(String(t))}
-                style={{
-                  paddingHorizontal: 12,
-                  paddingVertical: 6,
-                  borderRadius: 20,
-                  backgroundColor: '#1E1E1E',
-                  borderWidth: 1,
-                  borderColor: '#333',
-                }}
-              >
-                <Text style={{ color: '#ccc', fontWeight: '600' }}>{t}s</Text>
-              </Pressable>
-            ))}
-          </View>
-
-          {/* 🔥 CONTROLS */}
-          <View style={{ flexDirection: 'row', gap: 20 }}>
-            {!isRunning ? (
-              <Pressable onPress={startTimer}>
-                <Text style={{ color: '#4CAF50', fontWeight: 'bold' }}>Start</Text>
-              </Pressable>
-            ) : (
-              <Pressable onPress={pauseTimer}>
-                <Text style={{ color: '#FFC107', fontWeight: 'bold' }}>Pause</Text>
-              </Pressable>
-            )}
-
-            <Pressable onPress={resetTimer}>
-              <Text style={{ color: '#FF5252', fontWeight: 'bold' }}>Reset</Text>
-            </Pressable>
-          </View>
-        </View>
 
         {/* PREVIEW */}
         {workoutExercises.length > 0 && (
@@ -683,7 +776,7 @@ export function AddWorkoutScreen() {
           </Text>
         </Pressable>
       )}
-      {(timeLeft > 0 || isRunning) && (
+      {hasLoggedSet && (timeLeft > 0 || isRunning) && (
         <View style={{
           position: 'absolute',
           bottom: 100,
@@ -700,23 +793,51 @@ export function AddWorkoutScreen() {
             REST
           </Text>
 
-          <View style={{
-            width: 120,
-            height: 120,
-            borderRadius: 60,
-            borderWidth: 4,
-            borderColor: COLORS.accent,
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginVertical: 10,
-          }}>
-            <Text style={{
-              fontSize: 32,
-              fontWeight: 'bold',
-              color: '#fff'
+          {/* CIRCULAR PROGRESS */}
+          <View style={{ marginVertical: 10 }}>
+            <Svg width={120} height={120}>
+              {/* Background circle */}
+              <Circle
+                stroke="#333"
+                fill="none"
+                cx="60"
+                cy="60"
+                r={radius}
+                strokeWidth={strokeWidth}
+              />
+
+              {/* Progress ring */}
+              <Circle
+                stroke={COLORS.accent}
+                fill="none"
+                cx="60"
+                cy="60"
+                r={radius}
+                strokeWidth={strokeWidth}
+                strokeDasharray={circumference}
+                strokeDashoffset={circumference * (1 - progress)}
+                strokeLinecap="round"
+              />
+            </Svg>
+
+            {/* Center text */}
+            <View style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: 120,
+              height: 120,
+              alignItems: 'center',
+              justifyContent: 'center',
             }}>
-              {timeLeft}s
-            </Text>
+              <Text style={{
+                fontSize: 28,
+                fontWeight: 'bold',
+                color: '#fff'
+              }}>
+                {timeLeft}s
+              </Text>
+            </View>
           </View>
 
           <View style={{ flexDirection: 'row', gap: 30 }}>

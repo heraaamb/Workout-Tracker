@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -29,6 +29,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../App';
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const MUSCLE_GROUPS: MuscleGroup[] = [
   'Chest', 'Back', 'Legs', 'Shoulders', 'Biceps', 'Triceps', 'Core'
@@ -46,7 +47,7 @@ export function HomeScreen() {
 
   // ✅ keep as string (calendar format)
   const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split('T')[0]
+    new Date().toLocaleDateString('en-CA')
   );
 
   const navigation = useNavigation<NavigationProp>();
@@ -60,7 +61,7 @@ export function HomeScreen() {
     setBodyweight(bw);
     setLogs(lg);
   };
-
+  
   useFocusEffect(
     useCallback(() => {
       fetchData();
@@ -69,7 +70,7 @@ export function HomeScreen() {
 
   // 🔥 REST DAY
   const addRestDay = async () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toLocaleDateString('en-CA');
 
     const existingLogs = await loadDayLogs();
     const workouts = await loadWorkouts();
@@ -95,7 +96,7 @@ export function HomeScreen() {
     }
 
     const newLog: DayLog = {
-      date: new Date().toISOString(),
+      date: new Date().toLocaleDateString('en-CA'),
       type: 'rest',
     };
 
@@ -187,7 +188,7 @@ export function HomeScreen() {
 
         <TouchableOpacity
           style={styles.progressBtn}
-          onPress={() => navigation.navigate('Progress')}
+          onPress={() => navigation.navigate('Performance')}
         >
           <MaterialCommunityIcons
             name="chart-bar"
