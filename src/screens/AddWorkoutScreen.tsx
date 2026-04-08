@@ -35,6 +35,15 @@ const MUSCLE_GROUPS: MuscleGroup[] = [
   'Chest', 'Back', 'Legs', 'Shoulders', 'Biceps', 'Triceps', 'Core'
 ];
 
+const BODYWEIGHT_EXERCISES = [
+  'Push Up',
+  'Pull Up',
+  'Chin Up',
+  'Dips',
+  'Plank',
+  'Sit Up',
+];
+
 export function AddWorkoutScreen() {
   const navigation = useNavigation();
   const route = useRoute<any>();
@@ -64,14 +73,38 @@ export function AddWorkoutScreen() {
   const [hasLoggedSet, setHasLoggedSet] = useState(false);
   const [loggedSets, setLoggedSets] = useState<number[]>([]); 
   const [showCustomInput, setShowCustomInput] = useState(false);
-
+  const isBodyweight = BODYWEIGHT_EXERCISES.includes(exercise);
   const [exerciseList, setExerciseList] = useState<StoredExercise[]>([]);
 
-  useFocusEffect(
-    useCallback(() => {
-      getExercises().then(setExerciseList);
-    }, [])
-  );
+  const { date, existingWorkouts } = route.params || {};
+
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    const loadExisting = async () => {
+
+      // 🔥 EDIT MODE → use passed workouts
+      if (existingWorkouts !== undefined) {
+        if (existingWorkouts.length > 0) {
+          const mergedExercises = existingWorkouts.flatMap((w: any) => w.exercises);
+
+          setWorkoutExercises(mergedExercises);
+          setEditingWorkoutId(existingWorkouts[0]?.id || null);
+        } else {
+          // 🔥 explicitly empty → new workout for that date
+          setWorkoutExercises([]);
+          setEditingWorkoutId(null);
+        }
+
+        return;
+      }
+
+      // 🔥 NEW WORKOUT → DO NOTHING (stay blank)
+      setWorkoutExercises([]);
+      setEditingWorkoutId(null);
+    };
+
+    loadExisting();
+  }, [existingWorkouts]);
 
   // ⏱️ REST TIMER
   useEffect(() => {
@@ -184,7 +217,7 @@ export function AddWorkoutScreen() {
     const set = sets[index];
 
     // ❌ prevent empty sets
-    if (!set.reps || !set.weight) {
+    if (!set.reps) {
       Alert.alert('Fill reps & weight first');
       return;
     }
@@ -212,7 +245,7 @@ export function AddWorkoutScreen() {
   );
 
   const handleAddExerciseToWorkout = async () => {
-    if (!muscleGroup || !exercise || sets.some(s => s.reps === '' || s.weight === '')) return;
+    if (!muscleGroup || !exercise || sets.some(s => s.reps === '')) return;
 
     if (editingExerciseIndex !== null) {
       // 🔥 UPDATE EXISTING
@@ -229,7 +262,14 @@ export function AddWorkoutScreen() {
       // 🔥 ADD NEW
       setWorkoutExercises(prev => [
         ...prev,
-        { name: exercise, muscleGroup, sets }
+        {
+          name: exercise,
+          muscleGroup,
+          sets: sets.map(s => ({
+            ...s,
+            weight: s.weight === '' ? '0' : s.weight
+          }))
+        }
       ]);
     }
 
@@ -408,7 +448,7 @@ export function AddWorkoutScreen() {
   const isExerciseValid =
     muscleGroup !== '' &&
     exercise !== '' &&
-    sets.every(s => Number(s.reps) > 0 && Number(s.weight) > 0);
+    sets.every(s => Number(s.reps) > 0);
 
   useEffect(() => {
     setSearchQuery('');
@@ -619,7 +659,7 @@ export function AddWorkoutScreen() {
                   <TextInput
                     style={styles.setInput}
                     keyboardType="decimal-pad"
-                    placeholder='Weight'
+                    placeholder='Weight (optional)'
                     placeholderTextColor={COLORS.textSecondary}
                     value={set.weight ? String(set.weight) : ''}
                     onChangeText={(v) => handleSetChange(i, 'weight', v)}

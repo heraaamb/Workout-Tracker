@@ -30,6 +30,8 @@ import type { RootStackParamList } from '../../App';
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from 'react-native';
+
 
 const MUSCLE_GROUPS: MuscleGroup[] = [
   'Chest', 'Back', 'Legs', 'Shoulders', 'Biceps', 'Triceps', 'Core'
@@ -67,6 +69,51 @@ export function HomeScreen() {
       fetchData();
     }, [])
   );
+
+
+  const handleDayLongPress = (day: any) => {
+    const date = day.dateString;
+
+    const dayWorkouts = workouts.filter(
+      w => w.date.split('T')[0] === date
+    );
+
+    if (dayWorkouts.length > 0) {
+      // 🔥 HAS WORKOUT → EDIT OPTION
+      Alert.alert(
+        'Workout Options',
+        `You have ${dayWorkouts.length} workout(s) on this day`,
+        [
+          {
+            text: 'Edit Workout',
+            onPress: () =>
+              navigation.navigate('Add', { date }),
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+        ]
+      );
+    } else {
+      // 🔥 NO WORKOUT → ADD OPTION
+      Alert.alert(
+        'No workout',
+        'Do you want to add a workout for this day?',
+        [
+          {
+            text: 'Add Workout',
+            onPress: () =>
+              navigation.navigate('Add', { date }),
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+        ]
+      );
+    }
+  };
 
   // 🔥 REST DAY
   const addRestDay = async () => {
@@ -245,6 +292,8 @@ export function HomeScreen() {
                 markingType="multi-dot"
                 markedDates={markedDates}
                 onDayPress={d => setSelectedDate(d.dateString)}
+                onDayLongPress={handleDayLongPress} // 🔥 ADD THIS
+
 
                 theme={{
                   backgroundColor: '#1E1E1E',
@@ -286,10 +335,11 @@ export function HomeScreen() {
       />
 
       {/* ✅ FIXED FAB */}
-      <FAB
+     <FAB
         onPress={() =>
           navigation.navigate('Add', {
-            date: selectedDate // ✅ FIXED (NO toISOString)
+            date: selectedDate,
+            existingWorkouts: selectedDateWorkouts, // ✅ FIXED
           })
         }
       />

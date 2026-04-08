@@ -14,6 +14,7 @@ import { loadBodyweight } from '../utils/storage';
 import { COLORS, SPACING } from '../styles/theme';
 
 import { useFocusEffect } from '@react-navigation/native';
+import { Swipeable } from 'react-native-gesture-handler';
 
 export function WeightHistoryScreen() {
   
@@ -22,6 +23,33 @@ export function WeightHistoryScreen() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any[]>([]);
   const [targetWeight, setTargetWeight] = useState<number | null>(null);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+
+  const handleEditSave = async (id: string) => {
+    if (!editValue || Number(editValue) <= 0) {
+      Alert.alert('Enter valid weight');
+      return;
+    }
+
+    const existing = await loadBodyweight();
+
+    const updated = existing.map(w =>
+      w.id === id
+        ? { ...w, weight: Number(editValue) }
+        : w
+    );
+
+    await AsyncStorage.setItem(
+      'bodyweight',
+      JSON.stringify(updated)
+    );
+
+    setData(updated);
+    setEditingId(null);
+    setEditValue('');
+  };
 
   // 🔥 LOAD DATA
   useFocusEffect(
@@ -50,6 +78,33 @@ export function WeightHistoryScreen() {
       loadData();
     }, [])
   );
+
+  // 🔥 DELETE ENTRY
+  const deleteWeight = async (id: string) => {
+    Alert.alert(
+      'Delete Entry',
+      'Are you sure you want to delete this weight log?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const existing = await loadBodyweight();
+
+            const updated = existing.filter(w => w.id !== id);
+
+            await AsyncStorage.setItem(
+              'bodyweight',
+              JSON.stringify(updated)
+            );
+
+            setData(updated); // 🔥 refresh UI instantly
+          }
+        }
+      ]
+    );
+  };
 
   // 🔥 SMART REMINDER (no spam)
   const checkWeightReminder = async () => {
@@ -117,6 +172,90 @@ export function WeightHistoryScreen() {
     ],
   };
 
+  const getWeeklyInsights = () => {
+    if (data.length === 0) return null;
+
+    const now = new Date();
+
+    const thisWeek: number[] = [];
+    const lastWeek: number[] = [];
+
+    data.forEach(entry => {
+      const date = new Date(entry.date);
+      const diffDays = Math.floor(
+        (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)
+      );
+
+      if (diffDays <= 7) {
+        thisWeek.push(Number(entry.weight));
+      } else if (diffDays <= 14) {
+        lastWeek.push(Number(entry.weight));
+      }
+    });
+
+    const avg = (arr: number[]) =>
+      arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+
+    const thisAvg = avg(thisWeek);
+    const lastAvg = avg(lastWeek);
+
+    let change = null;
+
+    if (thisAvg !== null && lastAvg !== null) {
+      change = thisAvg - lastAvg;
+    }
+
+    return {
+      thisAvg,
+      lastAvg,
+      change,
+    };
+  };
+
+  const weekly = getWeeklyInsights();
+
+  const renderRightActions = (item: any) => (
+    <View style={{ flexDirection: 'row' }}>
+
+      {/* EDIT */}
+      <Pressable
+        onPress={() => {
+          setEditingId(item.id);
+          setEditValue(String(item.weight));
+        }}
+        style={{
+          backgroundColor: COLORS.accent,
+          justifyContent: 'center',
+          alignItems: 'center',
+          width: 80,
+          borderRadius: 10,
+          marginRight: 6,
+        }}
+      >
+        <Text style={{ color: '#000', fontWeight: 'bold' }}>
+          Edit
+        </Text>
+      </Pressable>
+
+      {/* DELETE */}
+      <Pressable
+        onPress={() => deleteWeight(item.id)}
+        style={{
+          backgroundColor: '#FF3B30',
+          justifyContent: 'center',
+          alignItems: 'center',
+          width: 80,
+          borderRadius: 10,
+        }}
+      >
+        <Text style={{ color: '#fff', fontWeight: 'bold' }}>
+          Delete
+        </Text>
+      </Pressable>
+
+    </View>
+  );
+
   return (
     <View style={styles.container}>
 
@@ -149,8 +288,6 @@ export function WeightHistoryScreen() {
             color: '#fff',
           }}
         />
-
-        
 
         {targetWeight && data.length > 0 && (() => {
           const latest = Number(data[0].weight);
@@ -238,6 +375,49 @@ export function WeightHistoryScreen() {
         />
       )}
 
+      {weekly && (
+        <View style={{
+          backgroundColor: COLORS.surface,
+          padding: 12,
+          borderRadius: 10,
+          marginBottom: 16,
+        }}>
+          <Text style={{
+            color: COLORS.text,
+            fontWeight: 'bold',
+            marginBottom: 8
+          }}>
+            Weekly Insights
+          </Text>
+
+          <Text style={{ color: '#888' }}>
+            This week: {weekly.thisAvg?.toFixed(1) ?? '--'} kg
+          </Text>
+
+          <Text style={{ color: '#888' }}>
+            Last week: {weekly.lastAvg?.toFixed(1) ?? '--'} kg
+          </Text>
+
+          {weekly.change !== null && (
+            <Text style={{
+              marginTop: 6,
+              fontWeight: '600',
+              color:
+                weekly.change > 0
+                  ? '#FF5252'
+                  : weekly.change < 0
+                  ? '#4CAF50'
+                  : '#888'
+            }}>
+              {weekly.change > 0 ? '+' : ''}
+              {weekly.change.toFixed(1)} kg
+              {weekly.change > 0 ? ' ↑' : weekly.change < 0 ? ' ↓' : ' →'}
+            </Text>
+          )}
+          
+        </View>
+      )}
+
       {/* 📜 HISTORY */}
       <FlatList
         data={data}
@@ -253,31 +433,69 @@ export function WeightHistoryScreen() {
             change = current - prev;
           }
 
+          const isEditing = editingId === item.id;
+
           return (
-            <View style={styles.card}>
-              <Text style={styles.weight}>{item.weight} kg</Text>
+            <Swipeable
+              renderRightActions={() => renderRightActions(item)}
+            >
+              <View style={styles.card}>
 
-              {change !== null && (
-                <Text
-                  style={{
-                    marginTop: 4,
-                    fontWeight: '600',
-                    color:
-                      change > 0 ? '#FF5252'
-                      : change < 0 ? '#4CAF50'
-                      : '#888',
-                  }}
-                >
-                  {change > 0 ? '+' : ''}
-                  {change.toFixed(1)} kg
-                  {change > 0 ? ' ↑' : change < 0 ? ' ↓' : ' →'}
-                </Text>
-              )}
+                {isEditing ? (
+                  <>
+                    <TextInput
+                      value={editValue}
+                      onChangeText={setEditValue}
+                      keyboardType="decimal-pad"
+                      style={{
+                        backgroundColor: '#1E1E1E',
+                        padding: 10,
+                        borderRadius: 8,
+                        color: '#fff',
+                      }}
+                    />
 
-              <Text style={styles.date}>
-                {new Date(item.date).toDateString()}
-              </Text>
-            </View>
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                      <Pressable onPress={() => handleEditSave(item.id)}>
+                        <Text style={{ color: COLORS.accent, fontWeight: '600' }}>
+                          Save
+                        </Text>
+                      </Pressable>
+
+                      <Pressable onPress={() => setEditingId(null)}>
+                        <Text style={{ color: '#888' }}>Cancel</Text>
+                      </Pressable>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.weight}>{item.weight} kg</Text>
+
+                    {change !== null && (
+                      <Text
+                        style={{
+                          marginTop: 4,
+                          fontWeight: '600',
+                          color:
+                            change > 0 ? '#FF5252'
+                            : change < 0 ? '#4CAF50'
+                            : '#888',
+                        }}
+                      >
+                        {change > 0 ? '+' : ''}
+                        {change.toFixed(1)} kg
+                        {change > 0 ? ' ↑' : change < 0 ? ' ↓' : ' →'}
+                      </Text>
+                    )}
+
+                    <Text style={styles.date}>
+                      {new Date(item.date).toDateString()}
+                    </Text>
+                  </>
+                )}
+
+              </View>
+            </Swipeable>
           );
         }}
       />

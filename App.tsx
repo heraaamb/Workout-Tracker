@@ -19,7 +19,10 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export type RootStackParamList = {
   Weight: undefined;
   HomeMain: undefined;
-  Add: { date?: string | Date };
+  Add: {
+    date?: string;
+    existingWorkouts?: any[];
+  };
   Performance: undefined;
   ExerciseManager: undefined;
 
