@@ -4,7 +4,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 
-import { loadWorkouts, saveWorkouts, getExercises, saveExercises } from '../utils/storage';
+import { loadWorkouts, saveWorkouts, getExercises, saveExercises, loadBodyweight, saveBodyweight } from '../utils/storage';
 
 export default function BackupScreen() {
 
@@ -13,8 +13,9 @@ export default function BackupScreen() {
     try {
       const workouts = await loadWorkouts();
       const exercises = await getExercises();
-
+      const weights = await loadBodyweight();
       const data = {
+        weights,
         workouts,
         exercises,
         exportedAt: new Date().toISOString(),
@@ -65,6 +66,7 @@ export default function BackupScreen() {
             onPress: async () => {
               await saveWorkouts(parsed.workouts);
               await saveExercises(parsed.exercises);
+              await saveBodyweight(parsed.weights || []);
               Alert.alert('Backup restored ✅');
             },
           },
