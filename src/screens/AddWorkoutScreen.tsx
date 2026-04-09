@@ -106,6 +106,17 @@ export function AddWorkoutScreen() {
     loadExisting();
   }, [existingWorkouts]);
 
+  useFocusEffect(
+    useCallback(() => {
+      const loadExercises = async () => {
+        const stored = await getExercises();
+        setExerciseList(stored || []);
+      };
+
+      loadExercises();
+    }, [])
+  );
+
   // ⏱️ REST TIMER
   useEffect(() => {
     const interval = setInterval(() => {
