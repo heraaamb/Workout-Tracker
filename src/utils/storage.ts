@@ -93,22 +93,32 @@ export const getExercises = async (): Promise<StoredExercise[]> => {
   return data ? JSON.parse(data) : [];
 };
 
+export const saveExercises = async (exercises: StoredExercise[]) => {
+  await AsyncStorage.setItem(EXERCISES_KEY, JSON.stringify(exercises));
+};
+
 export const saveExercise = async (name: string, muscleGroup: string) => {
+  const trimmedName = name.trim();
+
+  if (!trimmedName || !muscleGroup) return;
+
   const existing = await getExercises();
+
+  // normalize for comparison
+  const alreadyExists = existing.some(
+    e =>
+      e.name.toLowerCase() === trimmedName.toLowerCase() &&
+      e.muscleGroup === muscleGroup
+  );
+
+  if (alreadyExists) return;
 
   const updated = [
     ...existing,
-    { name: name.trim(), muscleGroup }
+    { name: trimmedName, muscleGroup }
   ];
 
-  const unique = updated.filter(
-    (v, i, arr) =>
-      arr.findIndex(
-        e => e.name === v.name && e.muscleGroup === v.muscleGroup
-      ) === i
-  );
-
-  await AsyncStorage.setItem(EXERCISES_KEY, JSON.stringify(unique));
+  await AsyncStorage.setItem(EXERCISES_KEY, JSON.stringify(updated));
 };
 
 export const deleteExercise = async (name: string, muscleGroup: string) => {

@@ -12,11 +12,14 @@ import { COLORS } from './src/styles/theme';
 import { MuscleGroup } from './src/types';
 import { MuscleDetailScreen } from './src/screens/MuscleDetailScreen';
 import { ExerciseManagerScreen } from './src/screens/ExerciseManagerScreen';
+import * as FileSystem from 'expo-file-system';
+import { saveWorkouts, saveExercises } from './src/utils/storage';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export type RootStackParamList = {
+  Backup: undefined;
   Weight: undefined;
   HomeMain: undefined;
   Add: {
@@ -49,6 +52,7 @@ function HomeStack() {
       <Stack.Screen name="MuscleDetail" component={MuscleDetailScreen} />
       <Stack.Screen name="EditWorkout" component={EditWorkoutScreen} />
       <Stack.Screen name="ExerciseManager" component={ExerciseManagerScreen} />
+      <Stack.Screen name="Backup" component={BackupScreen} />
     </Stack.Navigator>
   );
 }
@@ -110,6 +114,7 @@ function Tabs() {
 
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { WeightHistoryScreen } from './src/screens/WeightHistoryScreen';
+import BackupScreen from './src/screens/BackupScreen';
 
 export default function App() {
   return (

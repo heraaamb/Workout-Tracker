@@ -6,6 +6,7 @@ import {
   FlatList,
   TouchableOpacity,
   TextInput,
+  Pressable,
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -244,6 +245,10 @@ export function HomeScreen() {
           />
         </TouchableOpacity>
       </View>
+
+      <Pressable onPress={() => navigation.navigate('Backup')}>
+        <Text style={styles.btnText}>Backup</Text>
+      </Pressable>
 
       <FlatList
         data={filteredWorkouts}
@@ -510,6 +515,13 @@ restBtnText: {
   color: '#9E9E9E',
   fontWeight: '600',
   fontSize: 16,
+},
+
+btnText: {
+  color: COLORS.accent,
+  fontWeight: '600',
+  fontSize: 16,
+  left: SPACING.lg,
 },
 
 });
