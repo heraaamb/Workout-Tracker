@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS } from '../styles/theme';
 import type { Workout } from '../types';
 
@@ -9,6 +10,13 @@ type Props = {
 };
 
 export function WorkoutCard({ workout, showDate = true }: Props) {
+  const exerciseCount = workout.exercises.length;
+  const setCount = workout.exercises.reduce(
+    (total, exercise) => total + exercise.sets.length,
+    0
+  );
+  const muscleGroups = [...new Set(workout.exercises.map(ex => ex.muscleGroup))];
+
   return (
     <View style={styles.card}>
       
