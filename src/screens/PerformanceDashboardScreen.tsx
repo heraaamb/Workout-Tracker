@@ -267,7 +267,9 @@ export function PerformanceDashboardScreen() {
                 {Object.keys(weeklyFrequency).length === 0
                   ? <Text style={styles.sub}>No workouts</Text>
                   : Object.entries(weeklyFrequency).map(([m, c]) => (
-                      <Text key={m}>{m}: {c as number}</Text>
+                      <Text  key={m} style={styles.text} >
+                        {m}: {c as number}
+                      </Text>
                     ))
                 }
               </View>
