@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
   TextInput, Alert,
-  Pressable
+  Pressable, RefreshControl
 } from 'react-native';
 
 import { LineChart } from 'react-native-chart-kit';
@@ -10,14 +10,14 @@ import { Dimensions } from 'react-native';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { loadBodyweight } from '../utils/storage';
+import { loadBodyweight, updateBodyweight } from '../utils/storage';
 import { COLORS, SPACING } from '../styles/theme';
 
 import { useFocusEffect } from '@react-navigation/native';
 import { Swipeable } from 'react-native-gesture-handler';
 
 export function WeightHistoryScreen() {
-  
+
   const screenWidth = Dimensions.get('window').width;
 
   const [loading, setLoading] = useState(false);
@@ -27,26 +27,48 @@ export function WeightHistoryScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
 
+  const loadData = useCallback(async () => {
+    setLoading(true);
+
+    const res = await loadBodyweight();
+
+    const sorted = res.sort(
+      (a: any, b: any) =>
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+
+    setData(sorted);
+
+    const savedTarget = await AsyncStorage.getItem('targetWeight');
+    if (savedTarget) {
+      setTargetWeight(Number(savedTarget));
+    } else {
+      setTargetWeight(null);
+    }
+
+    setLoading(false);
+  }, []);
+
+  const handleRefresh = useCallback(async () => {
+    setEditingId(null);
+    setEditValue('');
+    await loadData();
+  }, [loadData]);
+
   const handleEditSave = async (id: string) => {
     if (!editValue || Number(editValue) <= 0) {
       Alert.alert('Enter valid weight');
       return;
     }
 
-    const existing = await loadBodyweight();
+    const updated = await updateBodyweight(id, Number(editValue));
 
-    const updated = existing.map(w =>
-      w.id === id
-        ? { ...w, weight: Number(editValue) }
-        : w
+    setData(
+      [...updated].sort(
+        (a: any, b: any) =>
+          new Date(b.date).getTime() - new Date(a.date).getTime()
+      )
     );
-
-    await AsyncStorage.setItem(
-      'bodyweight',
-      JSON.stringify(updated)
-    );
-
-    setData(updated);
     setEditingId(null);
     setEditValue('');
   };
@@ -54,29 +76,8 @@ export function WeightHistoryScreen() {
   // 🔥 LOAD DATA
   useFocusEffect(
     useCallback(() => {
-      const loadData = async () => {
-        setLoading(true);
-
-        const res = await loadBodyweight();
-
-        const sorted = res.sort(
-          (a: any, b: any) =>
-            new Date(b.date).getTime() - new Date(a.date).getTime()
-        );
-
-        setData(sorted);
-
-        // ✅ LOAD TARGET
-        const savedTarget = await AsyncStorage.getItem('targetWeight');
-        if (savedTarget) {
-          setTargetWeight(Number(savedTarget));
-        }
-
-        setLoading(false);
-      };
-
       loadData();
-    }, [])
+    }, [loadData])
   );
 
   // 🔥 DELETE ENTRY
@@ -95,7 +96,7 @@ export function WeightHistoryScreen() {
             const updated = existing.filter(w => w.id !== id);
 
             await AsyncStorage.setItem(
-              'bodyweight',
+              '@bodyweight_logs',
               JSON.stringify(updated)
             );
 
@@ -406,15 +407,15 @@ export function WeightHistoryScreen() {
                 weekly.change > 0
                   ? '#FF5252'
                   : weekly.change < 0
-                  ? '#4CAF50'
-                  : '#888'
+                    ? '#4CAF50'
+                    : '#888'
             }}>
               {weekly.change > 0 ? '+' : ''}
               {weekly.change.toFixed(1)} kg
               {weekly.change > 0 ? ' ↑' : weekly.change < 0 ? ' ↓' : ' →'}
             </Text>
           )}
-          
+
         </View>
       )}
 
@@ -422,6 +423,15 @@ export function WeightHistoryScreen() {
       <FlatList
         data={data}
         keyExtractor={(item) => item.id}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading}
+            onRefresh={handleRefresh}
+            tintColor={COLORS.accent}
+            colors={[COLORS.accent]}
+            progressBackgroundColor={COLORS.surface}
+          />
+        }
         renderItem={({ item, index }) => {
           const current = Number(item.weight);
           const prev = data[index + 1]
@@ -469,7 +479,9 @@ export function WeightHistoryScreen() {
                   </>
                 ) : (
                   <>
-                    <Text style={styles.weight}>{item.weight} kg</Text>
+                    <View style={styles.cardHeader}>
+                      <Text style={styles.weight}>{item.weight} kg</Text>
+                    </View>
 
                     {change !== null && (
                       <Text
@@ -478,8 +490,8 @@ export function WeightHistoryScreen() {
                           fontWeight: '600',
                           color:
                             change > 0 ? '#FF5252'
-                            : change < 0 ? '#4CAF50'
-                            : '#888',
+                              : change < 0 ? '#4CAF50'
+                                : '#888',
                         }}
                       >
                         {change > 0 ? '+' : ''}
@@ -527,6 +539,28 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 10,
     marginBottom: 10,
+  },
+
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+
+  actionRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+
+  editText: {
+    color: COLORS.accent,
+    fontWeight: '700',
+  },
+
+  deleteText: {
+    color: '#FF3B30',
+    fontWeight: '700',
   },
 
   weight: {

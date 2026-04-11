@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Pressable, Alert, StyleSheet } from 'react-native';
+import { View, Text, Pressable, Alert, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
@@ -7,17 +7,29 @@ import * as DocumentPicker from 'expo-document-picker';
 import { loadWorkouts, saveWorkouts, getExercises, saveExercises, loadBodyweight, saveBodyweight } from '../utils/storage';
 
 export default function BackupScreen() {
+  const [refreshing, setRefreshing] = React.useState(false);
+
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await Promise.all([loadWorkouts(), getExercises(), loadBodyweight()]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // 🔥 EXPORT
   const handleExport = async () => {
     try {
       const workouts = await loadWorkouts();
-      const exercises = await getExercises();
+      const customExercises = await getExercises();
       const weights = await loadBodyweight();
       const data = {
         weights,
         workouts,
-        exercises,
+        exercises: customExercises,
+        customExercises,
         exportedAt: new Date().toISOString(),
       };
 
@@ -50,7 +62,9 @@ export default function BackupScreen() {
       const content = await FileSystem.readAsStringAsync(fileUri);
       const parsed = JSON.parse(content);
 
-      if (!parsed.workouts || !parsed.exercises) {
+      const restoredExercises = parsed.customExercises || parsed.exercises || [];
+
+      if (!parsed.workouts || !Array.isArray(restoredExercises)) {
         Alert.alert('Invalid backup file');
         return;
       }
@@ -65,7 +79,7 @@ export default function BackupScreen() {
             style: 'destructive',
             onPress: async () => {
               await saveWorkouts(parsed.workouts);
-              await saveExercises(parsed.exercises);
+              await saveExercises(restoredExercises);
               await saveBodyweight(parsed.weights || []);
               Alert.alert('Backup restored ✅');
             },
@@ -80,7 +94,19 @@ export default function BackupScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          tintColor="#4CAF50"
+          colors={['#4CAF50']}
+          progressBackgroundColor="#1E1E1E"
+        />
+      }
+    >
       <Text style={styles.title}>Backup & Restore</Text>
 
       <Pressable style={styles.btn} onPress={handleExport}>
@@ -90,16 +116,19 @@ export default function BackupScreen() {
       <Pressable style={[styles.btn, { backgroundColor: '#FF5252' }]} onPress={handleImport}>
         <Text style={styles.btnText}>Import Data</Text>
       </Pressable>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#121212',
+  },
+  content: {
     padding: 20,
     justifyContent: 'center',
-    backgroundColor: '#121212',
+    flexGrow: 1,
   },
   title: {
     fontSize: 24,

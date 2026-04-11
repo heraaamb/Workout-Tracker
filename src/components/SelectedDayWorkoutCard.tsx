@@ -1,23 +1,35 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS } from '../styles/theme';
 import type { Workout } from '../types';
+import * as Haptics from 'expo-haptics';
 
 type Props = {
   workout: Workout;
   index: number;
+  onDelete?: () => void;
 };
 
-export function SelectedDayWorkoutCard({ workout, index }: Props) {
+export function SelectedDayWorkoutCard({ workout, index, onDelete }: Props) {
   const exerciseCount = workout.exercises.length;
+
   const setCount = workout.exercises.reduce(
     (total, exercise) => total + exercise.sets.length,
     0
   );
 
   return (
-    <View style={styles.card}>
+    <TouchableOpacity
+      style={styles.card}
+      activeOpacity={0.9}
+      onLongPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        onDelete?.();
+      }}
+      delayLongPress={400}
+    >
+      {/* Header */}
       <View style={styles.header}>
         <View>
           <Text style={styles.sessionLabel}>Session {index + 1}</Text>
@@ -36,16 +48,24 @@ export function SelectedDayWorkoutCard({ workout, index }: Props) {
         </View>
       </View>
 
+      {/* Exercises */}
       <View style={styles.exerciseList}>
         {workout.exercises.map((exercise, exerciseIndex) => (
-          <View key={`${exercise.name}-${exerciseIndex}`} style={styles.exerciseRow}>
+          <View
+            key={`${exercise.name}-${exerciseIndex}`}
+            style={styles.exerciseRow}
+          >
             <View style={styles.exerciseMain}>
               <View
                 style={[
                   styles.exerciseDot,
-                  { backgroundColor: COLORS.muscleGroups[exercise.muscleGroup] },
+                  {
+                    backgroundColor:
+                      COLORS.muscleGroups[exercise.muscleGroup],
+                  },
                 ]}
               />
+
               <View style={styles.exerciseTextWrap}>
                 <Text style={styles.exerciseName}>{exercise.name}</Text>
                 <Text style={styles.exerciseMeta}>
@@ -57,7 +77,10 @@ export function SelectedDayWorkoutCard({ workout, index }: Props) {
 
             <View style={styles.setChips}>
               {exercise.sets.map((set, setIndex) => (
-                <View key={`${exerciseIndex}-${setIndex}`} style={styles.setChip}>
+                <View
+                  key={`${exerciseIndex}-${setIndex}`}
+                  style={styles.setChip}
+                >
                   <Text style={styles.setChipText}>
                     {set.reps} x {set.weight}
                   </Text>
@@ -67,7 +90,10 @@ export function SelectedDayWorkoutCard({ workout, index }: Props) {
           </View>
         ))}
       </View>
-    </View>
+
+      {/* Hint */}
+      <Text style={styles.hintText}>Long press to delete</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -80,6 +106,7 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     marginBottom: SPACING.md,
   },
+
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -87,6 +114,7 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     marginBottom: SPACING.md,
   },
+
   sessionLabel: {
     color: COLORS.textSecondary,
     fontSize: 12,
@@ -94,11 +122,13 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 4,
   },
+
   sessionTitle: {
     color: COLORS.text,
     fontSize: 20,
     fontWeight: '700',
   },
+
   summaryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -108,57 +138,75 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: RADIUS.round,
   },
+
   summaryBadgeText: {
     color: COLORS.accent,
     fontSize: 12,
     fontWeight: '700',
   },
+
   exerciseList: {
     gap: SPACING.sm,
   },
+
   exerciseRow: {
     backgroundColor: COLORS.background,
     borderRadius: RADIUS.md,
     padding: 12,
     gap: 10,
   },
+
   exerciseMain: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
+
   exerciseDot: {
     width: 10,
     height: 10,
     borderRadius: RADIUS.round,
   },
+
   exerciseTextWrap: {
     flex: 1,
   },
+
   exerciseName: {
     color: COLORS.text,
     fontSize: 15,
     fontWeight: '700',
     marginBottom: 2,
   },
+
   exerciseMeta: {
     color: COLORS.textSecondary,
     fontSize: 13,
   },
+
   setChips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
+
   setChip: {
     backgroundColor: COLORS.surfaceLight,
     borderRadius: RADIUS.round,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
+
   setChipText: {
     color: COLORS.text,
     fontSize: 12,
     fontWeight: '600',
+  },
+
+  hintText: {
+    color: '#666',
+    fontSize: 11,
+    marginTop: 8,
+    textAlign: 'right',
   },
 });

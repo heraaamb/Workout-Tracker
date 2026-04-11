@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Dimensions, RefreshControl } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LineChart } from 'react-native-chart-kit';
@@ -31,16 +31,17 @@ export function MuscleDetailScreen() {
 
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    const data = await loadWorkouts();
+    setWorkouts(data);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      const fetchData = async () => {
-        const data = await loadWorkouts();
-        setWorkouts(data);
-      };
-
       fetchData();
-    }, [])
+    }, [fetchData])
   );
 
   const exercises = getExercisesForMuscle(workouts, muscle as MuscleGroup);
@@ -88,7 +89,27 @@ export function MuscleDetailScreen() {
   };
 
   return (
-    <ScrollView style={globalStyles.container} contentContainerStyle={styles.scrollContent}>
+    <ScrollView
+      style={globalStyles.container}
+      contentContainerStyle={styles.scrollContent}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={async () => {
+            setRefreshing(true);
+            try {
+              setSelectedExercise(null);
+              await fetchData();
+            } finally {
+              setRefreshing(false);
+            }
+          }}
+          tintColor={COLORS.accent}
+          colors={[COLORS.accent]}
+          progressBackgroundColor={COLORS.surface}
+        />
+      }
+    >
 
       {/* EXERCISE SELECTOR */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selector}>

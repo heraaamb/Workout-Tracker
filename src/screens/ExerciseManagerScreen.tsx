@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TextInput,
-  FlatList, Pressable, Alert
+  FlatList, Pressable, Alert, RefreshControl
 } from 'react-native';
 
 import { Swipeable } from 'react-native-gesture-handler';
@@ -17,7 +17,7 @@ import { COLORS, SPACING, RADIUS } from '../styles/theme';
 import type { MuscleGroup } from '../types';
 
 const MUSCLE_GROUPS: MuscleGroup[] = [
-  'Chest','Back','Legs','Shoulders','Biceps','Triceps','Core'
+  'Chest', 'Back', 'Legs', 'Shoulders', 'Biceps', 'Triceps', 'Core'
 ];
 
 type StoredExercise = {
@@ -32,10 +32,25 @@ export function ExerciseManagerScreen() {
   const [selectedMuscle, setSelectedMuscle] = useState<MuscleGroup>('Chest');
   const [newExercise, setNewExercise] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = async () => {
     const data = await getExercises();
     setExercises(data);
+  };
+
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      setSearch('');
+      setSelectedMuscle('Chest');
+      setNewExercise('');
+      setEditing(null);
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   useEffect(() => {
@@ -103,14 +118,7 @@ export function ExerciseManagerScreen() {
 
       <Text style={styles.title}>Exercises</Text>
 
-      {/* SEARCH */}
-      <TextInput
-        placeholder="Search..."
-        placeholderTextColor="#888"
-        value={search}
-        onChangeText={setSearch}
-        style={styles.search}
-      />
+
 
       {/* MUSCLE FILTER */}
       <View style={styles.pillRow}>
@@ -131,6 +139,15 @@ export function ExerciseManagerScreen() {
         ))}
       </View>
 
+      {/* SEARCH */}
+      <TextInput
+        placeholder="Search..."
+        placeholderTextColor="#888"
+        value={search}
+        onChangeText={setSearch}
+        style={styles.search}
+      />
+
       {/* ADD */}
       <View style={styles.addRow}>
         <TextInput
@@ -150,6 +167,15 @@ export function ExerciseManagerScreen() {
       <FlatList
         data={list}
         keyExtractor={(item, i) => item + i}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={COLORS.accent}
+            colors={[COLORS.accent]}
+            progressBackgroundColor={COLORS.surface}
+          />
+        }
         renderItem={({ item }) => {
           const defaultItem = isDefault(item);
 
@@ -203,7 +229,7 @@ const styles = StyleSheet.create({
     color: '#888',
   },
 
-    edit: {
+  edit: {
     color: COLORS.accent,
     marginLeft: 10,
     fontWeight: '600',
@@ -220,90 +246,90 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: SPACING.lg,
     backgroundColor: COLORS.background,
-    },
+  },
 
-    title: {
+  title: {
     fontSize: 26,
     fontWeight: 'bold',
     color: COLORS.text,
     marginBottom: 12,
-    },
+  },
 
-    search: {
+  search: {
     backgroundColor: '#1E1E1E',
     padding: 10,
     borderRadius: 10,
     marginBottom: 12,
     color: '#fff',
-    },
+  },
 
-    pillRow: {
+  pillRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
     marginBottom: 16,
-    },
+  },
 
-    pill: {
+  pill: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
     backgroundColor: '#1E1E1E',
     borderWidth: 1,
     borderColor: '#333',
-    },
+  },
 
-    pillText: {
+  pillText: {
     color: '#ccc',
     fontWeight: '600',
-    },
+  },
 
-    addRow: {
+  addRow: {
     flexDirection: 'row',
     gap: 10,
     marginBottom: 16,
-    },
+  },
 
-    input: {
+  input: {
     flex: 1,
     backgroundColor: '#1E1E1E',
     padding: 10,
     borderRadius: 10,
     color: '#fff',
-    },
+  },
 
-    addBtn: {
+  addBtn: {
     backgroundColor: COLORS.accent,
     width: 44,
     height: 44,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    },
+  },
 
-    card: {
+  card: {
     backgroundColor: COLORS.surface,
     padding: 14,
     borderRadius: 10,
     marginBottom: 10,
-    },
+  },
 
-    text: {
+  text: {
     color: COLORS.text,
     fontSize: 16,
-    },
+  },
 
-    deleteBtn: {
-        backgroundColor: 'red',
-        justifyContent: 'center',
-        alignItems: 'center',
-        width: 80,
-        borderRadius: 10,
-    },
+  deleteBtn: {
+    backgroundColor: 'red',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    borderRadius: 10,
+  },
 
-    empty: {
-        textAlign: 'center',
-        marginTop: 30,
-        color: COLORS.textSecondary,
-    },
+  empty: {
+    textAlign: 'center',
+    marginTop: 30,
+    color: COLORS.textSecondary,
+  },
 });

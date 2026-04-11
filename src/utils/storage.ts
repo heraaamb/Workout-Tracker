@@ -155,6 +155,25 @@ export const addBodyweight = async (weight: number) => {
   return updated;
 };
 
+export const updateBodyweight = async (id: string, weight: number) => {
+  const existing = await loadBodyweight();
+
+  const updated = existing.map(entry =>
+    entry.id === id ? { ...entry, weight } : entry
+  );
+
+  await saveBodyweight(updated);
+  return updated;
+};
+
+export const deleteBodyweight = async (id: string) => {
+  const existing = await loadBodyweight();
+  const updated = existing.filter(entry => entry.id !== id);
+
+  await saveBodyweight(updated);
+  return updated;
+};
+
 export const loadDayLogs = async (): Promise<DayLog[]> => {
   const data = await AsyncStorage.getItem(DAYLOG_KEY);
   return data ? JSON.parse(data) : [];

@@ -1,19 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { NavigationContainer } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { HomeScreen } from './src/screens/HomeScreen';
 import { AddWorkoutScreen } from './src/screens/AddWorkoutScreen';
 import { PerformanceDashboardScreen } from './src/screens/PerformanceDashboardScreen';
 import { EditWorkoutScreen } from './src/screens/EditWorkoutScreen';
-import { COLORS } from './src/styles/theme';
-import { MuscleGroup } from './src/types';
 import { MuscleDetailScreen } from './src/screens/MuscleDetailScreen';
 import { ExerciseManagerScreen } from './src/screens/ExerciseManagerScreen';
-import * as FileSystem from 'expo-file-system';
-import { saveWorkouts, saveExercises } from './src/utils/storage';
+import { WeightHistoryScreen } from './src/screens/WeightHistoryScreen';
+import BackupScreen from './src/screens/BackupScreen';
+
+import { COLORS } from './src/styles/theme';
+import { MuscleGroup } from './src/types';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -45,10 +47,12 @@ export type RootStackParamList = {
   };
 };
 
-function HomeStack() {
+function HomeStack({ onRefreshApp }: { onRefreshApp: () => void }) {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="HomeMain" component={HomeScreen} />
+      <Stack.Screen name="HomeMain">
+        {(props) => <HomeScreen {...props} onRefreshApp={onRefreshApp} />}
+      </Stack.Screen>
       <Stack.Screen name="MuscleDetail" component={MuscleDetailScreen} />
       <Stack.Screen name="EditWorkout" component={EditWorkoutScreen} />
       <Stack.Screen name="ExerciseManager" component={ExerciseManagerScreen} />
@@ -57,9 +61,7 @@ function HomeStack() {
   );
 }
 
-
-
-function Tabs() {
+function Tabs({ onRefreshApp }: { onRefreshApp: () => void }) {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -98,7 +100,9 @@ function Tabs() {
         },
       })}
     >
-      <Tab.Screen name="Home" component={HomeStack} />
+      <Tab.Screen name="Home">
+        {() => <HomeStack onRefreshApp={onRefreshApp} />}
+      </Tab.Screen>
 
       <Tab.Screen name="Exercises" component={ExerciseManagerScreen} />
 
@@ -107,20 +111,21 @@ function Tabs() {
       <Tab.Screen name="Performance" component={PerformanceDashboardScreen} />
 
       <Tab.Screen name="Weight" component={WeightHistoryScreen} />
-
     </Tab.Navigator>
   );
 }
 
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { WeightHistoryScreen } from './src/screens/WeightHistoryScreen';
-import BackupScreen from './src/screens/BackupScreen';
-
 export default function App() {
+  const [appKey, setAppKey] = useState(0);
+
+  const handleRefreshApp = () => {
+    setAppKey(prev => prev + 1); // 🔥 forces full app remount
+  };
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <NavigationContainer>
-        <Tabs />
+      <NavigationContainer key={appKey}>
+        <Tabs onRefreshApp={handleRefreshApp} />
       </NavigationContainer>
     </GestureHandlerRootView>
   );

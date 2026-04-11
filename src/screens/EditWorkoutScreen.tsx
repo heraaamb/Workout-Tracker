@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  RefreshControl,
 } from 'react-native';
 
 import { useRoute, useNavigation } from '@react-navigation/native';
@@ -21,6 +22,7 @@ export function EditWorkoutScreen() {
   const { workout } = route.params;
 
   const [sets, setSets] = useState(workout.sets);
+  const [refreshing, setRefreshing] = useState(false);
 
   // ✅ SAFE HELPER (handles old + new data)
   const getExercisesSafe = (w: any) => {
@@ -101,8 +103,29 @@ export function EditWorkoutScreen() {
     ]);
   };
 
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      setSets(workout.sets);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          tintColor={COLORS.accent}
+          colors={[COLORS.accent]}
+          progressBackgroundColor={COLORS.surface}
+        />
+      }
+    >
       <Text style={styles.title}>{workout.exercise}</Text>
 
       {sets.map((set: any, i: number) => (

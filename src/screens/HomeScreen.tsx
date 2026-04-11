@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   TextInput,
   Pressable,
+  RefreshControl,
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,6 +22,7 @@ import {
   addBodyweight,
   loadDayLogs,
   saveDayLogs,
+  saveWorkouts,
 } from '../utils/storage';
 
 import { COLORS, globalStyles, SPACING, RADIUS } from '../styles/theme';
@@ -30,7 +32,6 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../App';
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
 
 
@@ -40,17 +41,28 @@ const MUSCLE_GROUPS: MuscleGroup[] = [
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'HomeMain'>;
 
-export function HomeScreen() {
+type HomeScreenProps = {
+  onRefreshApp: () => void;
+};
+
+// import AsyncStorage from '@react-native-async-storage/async-storage';
+export function HomeScreen({ onRefreshApp }: HomeScreenProps) {
+  // await AsyncStorage.clear();
+  const todayDate = new Date().toLocaleDateString('en-CA');
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [bodyweight, setBodyweight] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
   const [weightInput, setWeightInput] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const [recentlyDeleted, setRecentlyDeleted] = useState<Workout | null>(null);
+  const [showUndo, setShowUndo] = useState(false);
 
   const [selectedMuscle, setSelectedMuscle] = useState<MuscleGroup | 'All'>('All');
 
   // ✅ keep as string (calendar format)
   const [selectedDate, setSelectedDate] = useState(
-    new Date().toLocaleDateString('en-CA')
+    todayDate
   );
 
   const navigation = useNavigation<NavigationProp>();
@@ -64,13 +76,46 @@ export function HomeScreen() {
     setBodyweight(bw);
     setLogs(lg);
   };
-  
+
   useFocusEffect(
     useCallback(() => {
       fetchData();
     }, [])
   );
 
+  const handleDeleteWorkout = async (workoutId: string) => {
+    Alert.alert(
+      'Delete Workout',
+      'Are you sure you want to delete this session?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const existing = await loadWorkouts();
+
+            const deletedWorkout = existing.find(w => w.id === workoutId);
+
+            const updated = existing.filter(w => w.id !== workoutId);
+
+            await saveWorkouts(updated);
+
+            setRecentlyDeleted(deletedWorkout || null);
+            setShowUndo(true);
+
+            fetchData();
+
+            // auto-hide undo after 5 sec
+            setTimeout(() => {
+              setShowUndo(false);
+              setRecentlyDeleted(null);
+            }, 5000);
+          },
+        },
+      ]
+    );
+  };
 
   const handleDayLongPress = (day: any) => {
     const date = day.dateString;
@@ -213,8 +258,8 @@ export function HomeScreen() {
     selectedMuscle === 'All'
       ? selectedDateWorkouts
       : selectedDateWorkouts.filter(w =>
-          w.exercises.some(ex => ex.muscleGroup === selectedMuscle)
-        );
+        w.exercises.some(ex => ex.muscleGroup === selectedMuscle)
+      );
 
   const selectedDateLabel = useMemo(
     () =>
@@ -275,6 +320,19 @@ export function HomeScreen() {
         data={filteredWorkouts}
         keyExtractor={(w, i) => `${w.id}-${i}`}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => {
+              setIsRefreshing(true);
+
+              // small delay for UX (optional)
+              setTimeout(() => {
+                onRefreshApp(); // 🔥 FULL APP RESET
+              }, 300);
+            }}
+          />
+        }
         ListHeaderComponent={
           <>
             {/* BODYWEIGHT */}
@@ -348,6 +406,31 @@ export function HomeScreen() {
                   textDayHeaderFontWeight: '500',
                 }}
               />
+            </View>
+
+            <View style={styles.legendContainer}>
+              {MUSCLE_GROUPS.map(muscle => (
+                <View key={muscle} style={styles.legendItem}>
+                  <View
+                    style={[
+                      styles.legendDot,
+                      { backgroundColor: COLORS.muscleGroups[muscle] },
+                    ]}
+                  />
+                  <Text style={styles.legendText}>{muscle}</Text>
+                </View>
+              ))}
+
+              {/* Rest Day */}
+              <View style={styles.legendItem}>
+                <View
+                  style={[
+                    styles.legendDot,
+                    { backgroundColor: '#9E9E9E' },
+                  ]}
+                />
+                <Text style={styles.legendText}>Rest</Text>
+              </View>
             </View>
 
             <View style={styles.selectedDaySection}>
@@ -441,16 +524,42 @@ export function HomeScreen() {
         }
         renderItem={({ item, index }) => (
           <View style={styles.workoutCardWrapper}>
-            <SelectedDayWorkoutCard workout={item} index={index} />
+            <SelectedDayWorkoutCard
+              workout={item}
+              index={index}
+              onDelete={() => handleDeleteWorkout(item.id)}
+            />
           </View>
         )}
         ListEmptyComponent={
           null
         }
+        ListFooterComponent={<View style={styles.listFooterSpacing} />}
       />
 
+      {showUndo && recentlyDeleted && (
+        <View style={styles.undoBar}>
+          <Text style={styles.undoText}>Workout deleted</Text>
+
+          <TouchableOpacity
+            onPress={async () => {
+              const existing = await loadWorkouts();
+
+              await saveWorkouts([recentlyDeleted, ...existing]);
+
+              setShowUndo(false);
+              setRecentlyDeleted(null);
+
+              fetchData();
+            }}
+          >
+            <Text style={styles.undoAction}>UNDO</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* ✅ FIXED FAB */}
-     <FAB
+      <FAB
         onPress={() =>
           navigation.navigate('Add', {
             date: selectedDate,
@@ -681,71 +790,121 @@ const styles = StyleSheet.create({
     color: COLORS.accent,
   },
 
-weightCard: {
-  backgroundColor: COLORS.surface,
-  marginHorizontal: SPACING.lg,
-  marginBottom: SPACING.md,
-  padding: SPACING.md,
-  borderRadius: RADIUS.lg,
-},
+  weightCard: {
+    backgroundColor: COLORS.surface,
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.md,
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+  },
 
-weightTitle: {
-  fontSize: 14,
-  color: COLORS.textSecondary,
-  marginBottom: 4,
-},
+  weightTitle: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginBottom: 4,
+  },
 
-weightValue: {
-  fontSize: 26,
-  fontWeight: 'bold',
-  color: COLORS.accent,
-},
+  weightValue: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: COLORS.accent,
+  },
 
-weightInputRow: {
-  flexDirection: 'row',
-  gap: 10,
-},
+  weightInputRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
 
-input: {
-  flex: 1,
-  backgroundColor: '#1E1E1E',
-  padding: 10,
-  borderRadius: 8,
-  color: COLORS.text,
-},
+  input: {
+    flex: 1,
+    backgroundColor: '#1E1E1E',
+    padding: 10,
+    borderRadius: 8,
+    color: COLORS.text,
+  },
 
-saveBtn: {
-  backgroundColor: COLORS.accent,
-  paddingHorizontal: 16,
-  justifyContent: 'center',
-  borderRadius: 8,
-},
+  saveBtn: {
+    backgroundColor: COLORS.accent,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    borderRadius: 8,
+  },
 
-restBtn: {
-  marginHorizontal: SPACING.lg,
-  marginBottom: SPACING.md,
-  backgroundColor: '#1E1E1E',
-  paddingVertical: 14,
-  borderRadius: 12,
-  alignItems: 'center',
-  borderWidth: 1,
-  borderColor: '#9E9E9E',
-},
+  restBtn: {
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.md,
+    backgroundColor: '#1E1E1E',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#9E9E9E',
+  },
 
-restBtnText: {
-  color: '#9E9E9E',
-  fontWeight: '600',
-  fontSize: 16,
-},
+  restBtnText: {
+    color: '#9E9E9E',
+    fontWeight: '600',
+    fontSize: 16,
+  },
 
   btnText: {
-  color: COLORS.accent,
-  fontWeight: '600',
-  fontSize: 16,
-  left: SPACING.lg,
-},
+    color: COLORS.accent,
+    fontWeight: '600',
+    fontSize: 16,
+    left: SPACING.lg,
+  },
   workoutCardWrapper: {
     marginHorizontal: SPACING.lg,
+  },
+  listFooterSpacing: {
+    height: SPACING.sm,
+  },
+
+  legendContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.md,
+  },
+
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+
+  legendText: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+  },
+
+  undoBar: {
+    position: 'absolute',
+    bottom: 80,
+    left: 20,
+    right: 20,
+    backgroundColor: '#333',
+    borderRadius: 10,
+    padding: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+
+  undoText: {
+    color: '#fff',
+  },
+
+  undoAction: {
+    color: COLORS.accent,
+    fontWeight: '700',
   },
 
 });
