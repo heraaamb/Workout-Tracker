@@ -48,6 +48,18 @@ export type StoredExercise = {
   muscleGroup: MuscleGroup;
 };
 
+export type WeekStats = {
+  workoutsCompleted: number;
+  totalSets: number;
+  totalReps: number;
+  totalVolume: number;
+  averageDuration: number | null;
+  muscleFrequency: Record<string, number>;
+  prsThisWeek: { exercise: string; value: number }[];
+};
+
+
+
 export const EXERCISES_BY_MUSCLE: Record<MuscleGroup, string[]> = {
   Chest: ['Barbell Bench Press', 'Incline Dumbbell Press', 'Push-ups', 'Pec Deck', 'Cable Flyes', 'Dips', 'Chest Press Machine'],
   Back: ['Pull-ups', 'Lat Pulldown', 'Barbell Row', 'Deadlift', 'Seated Row', 'Face Pulls', 'T-Bar Row', 'Dumbbell Row',],

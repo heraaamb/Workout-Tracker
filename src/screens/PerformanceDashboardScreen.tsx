@@ -10,19 +10,12 @@ import { loadWorkouts } from '../utils/storage';
 import { COLORS, SPACING, RADIUS } from '../styles/theme';
 import { useFocusEffect } from '@react-navigation/native';
 import type { Workout, WorkoutExercise, MuscleGroup } from '../types';
+import { WeekStats } from '../types';
 
 const screenWidth = Dimensions.get('window').width;
 const WEEKLY_GOAL = 5;
 
-type WeekStats = {
-  workoutsCompleted: number;
-  totalSets: number;
-  totalReps: number;
-  totalVolume: number;
-  averageDuration: number | null;
-  muscleFrequency: Record<string, number>;
-  prsThisWeek: { exercise: string; value: number }[];
-};
+
 
 function getWeekNumber(date: Date) {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
@@ -104,43 +97,63 @@ function getAllTimePRs(workouts: (Workout & Record<string, any>)[]) {
 
   workouts.forEach(workout => {
     workout.exercises.forEach(exercise => {
-      const weights = exercise.sets.map((s: any) => Number(s.weight) || 0);
-      const repsArr = exercise.sets.map((s: any) => Number(s.reps) || 0);
+      // 🔥 BODYWEIGHT CHECK
+      const hasWeight = exercise.sets.some(
+        (s: any) => (parseFloat(s.weight) || 0) > 0
+      );
 
-      const maxWeight = Math.max(...weights, 0);
+      // =========================
+      // 🟢 BODYWEIGHT PR (REPS)
+      // =========================
+      if (!hasWeight) {
+        const bestSet = exercise.sets.reduce((best: any, current: any) => {
+          const reps = Number(current.reps) || 0;
 
-      // 🔥 BODYWEIGHT PR (based on reps)
-      if (maxWeight === 0) {
-        const maxReps = Math.max(...repsArr, 0);
-        if (maxReps === 0) return;
+          if (!best || reps > best.reps) {
+            return { reps };
+          }
+          return best;
+        }, null);
+
+        if (!bestSet || bestSet.reps === 0) return;
 
         if (
           !prMap[exercise.name] ||
-          maxReps > prMap[exercise.name].value
+          bestSet.reps > prMap[exercise.name].value
         ) {
           prMap[exercise.name] = {
-            value: maxReps,
-            reps: maxReps,
+            value: bestSet.reps,
+            reps: bestSet.reps,
             date: workout.date,
             isBodyweight: true,
           };
         }
+      }
 
-      } else {
-        // 🔥 WEIGHTED PR (based on max weight)
-        let bestSetIndex = 0;
+      // =========================
+      // 🔴 WEIGHTED PR (TOP SET)
+      // =========================
+      else {
+        const bestSet = exercise.sets.reduce((best: any, current: any) => {
+          const weight = parseFloat(current.weight) || 0;
+          const reps = Number(current.reps) || 0;
 
-        // find the exact set where PR weight happened
-        weights.forEach((w, i) => {
-          if (w === maxWeight) {
-            // if multiple sets with same weight, take highest reps
-            if (repsArr[i] > (repsArr[bestSetIndex] || 0)) {
-              bestSetIndex = i;
-            }
+          if (!best) return { weight, reps };
+
+          // Higher weight wins
+          if (weight > best.weight) return { weight, reps };
+
+          // Same weight → higher reps wins
+          if (weight === best.weight && reps > best.reps) {
+            return { weight, reps };
           }
-        });
 
-        const reps = repsArr[bestSetIndex] || 1;
+          return best;
+        }, null);
+
+        if (!bestSet || bestSet.weight === 0) return;
+
+        const { weight: maxWeight, reps } = bestSet;
 
         if (
           !prMap[exercise.name] ||
@@ -148,7 +161,7 @@ function getAllTimePRs(workouts: (Workout & Record<string, any>)[]) {
         ) {
           prMap[exercise.name] = {
             value: maxWeight,
-            reps: reps, // ✅ exact reps at PR weight
+            reps: reps,
             date: workout.date,
             isBodyweight: false,
           };
@@ -163,11 +176,11 @@ function getAllTimePRs(workouts: (Workout & Record<string, any>)[]) {
     reps: data.reps,
     date: data.date,
     isBodyweight: data.isBodyweight,
-    muscle: workouts
-      .flatMap(w => w.exercises)
-      .find(ex => ex.name === exercise)?.muscleGroup || 'Other',
+    muscle:
+      workouts
+        .flatMap(w => w.exercises)
+        .find(ex => ex.name === exercise)?.muscleGroup || 'Other',
   }));
-
 }
 
 
@@ -306,16 +319,20 @@ export function PerformanceDashboardScreen() {
   const [selectedMuscle, setSelectedMuscle] = useState('Chest');
   const [selectedExercise, setSelectedExercise] = useState('');
   const [loading, setLoading] = useState(false);
-  const allTimePRs = useMemo(() => getAllTimePRs(workouts as any), [workouts]);
   const [selectedPRMuscle, setSelectedPRMuscle] = useState<string | null>(null);
   const [selectedPRExercise, setSelectedPRExercise] = useState<string | null>(null);
+
+  const allTimePRs = useMemo(() => getAllTimePRs(workouts as any), [workouts]);
+
   const prMuscles = useMemo(() => {
     return Array.from(new Set(allTimePRs.map(pr => pr.muscle)));
   }, [allTimePRs]);
+
   const prExercises = useMemo(() => {
     if (!selectedPRMuscle) return [];
     return allTimePRs.filter(pr => pr.muscle === selectedPRMuscle);
   }, [allTimePRs, selectedPRMuscle]);
+
   const selectedPR = useMemo(() => {
     return allTimePRs.find(pr => pr.exercise === selectedPRExercise);
   }, [allTimePRs, selectedPRExercise]);
