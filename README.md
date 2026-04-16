@@ -1,5 +1,5 @@
 
-  # Kinetic Fitness
+  # Workout Tracker
 
 [![React Native](https://img.shields.io/badge/React%20Native-0.81.5-blue.svg)](https://reactnative.dev/)
 [![Expo](https://img.shields.io/badge/Expo-~54.0.33-black.svg)](https://expo.dev/)
@@ -76,7 +76,7 @@ Core Components
 ## Folder Structure
 
 ```
-Kinetic-Fitness/
+Workout-Tracker/
 ├── assets/                 # Static assets (images, icons)
 ├── guidelines/             # Project guidelines
 ├── src/
