@@ -173,7 +173,7 @@ npx expo prebuild
 
 ```bash
 cd android
-./gradlew assembleRelease
+.\gradlew assembleRelease
 ```
 
 ---
@@ -186,11 +186,80 @@ android/app/build/outputs/apk/release/app-release.apk
 
 ---
 
-### 6. Install on Phone
+### 6. Install on Phone (Manual)
 
-* Transfer APK to phone
-* Enable "Install unknown apps"
-* Tap and install
+* Transfer APK to phone via USB / Drive / WhatsApp
+* Enable **Install unknown apps**
+* Tap APK → Install
+
+---
+
+### ⚡ Install using ADB (Recommended)
+
+This is the fastest way to install directly from your PC.
+
+#### 1. Enable USB Debugging
+
+* Go to Developer Options
+* Enable USB Debugging
+
+#### 2. Connect phone and verify
+
+```bash
+adb devices
+```
+
+You should see your device listed.
+
+---
+
+#### 3. Install APK
+
+```bash
+adb install android/app/build/outputs/apk/release/app-release.apk
+```
+
+---
+
+#### 4. If app already installed
+
+```bash
+adb install -r android/app/build/outputs/apk/release/app-release.apk
+```
+
+---
+
+### ❌ Common Errors & Fixes
+
+#### adb not recognized
+
+Add to PATH:
+
+```
+C:\Users\YourName\AppData\Local\Android\Sdk\platform-tools
+```
+
+---
+
+#### device unauthorized
+
+* Allow USB debugging on phone popup
+* Reconnect cable
+
+---
+
+#### INSTALL_FAILED_VERSION_DOWNGRADE
+
+```bash
+adb uninstall com.yourpackage.name
+```
+
+---
+
+#### App not installed (manual install)
+
+* Uninstall previous version
+* Free storage space
 
 ---
 
